@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Club Med — Offers Engine</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1e293b}
+.hdr{background:linear-gradient(135deg,#1a3a5c,#0d6e9e);color:white;padding:13px 18px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 10px rgba(0,0,0,.25);position:sticky;top:0;z-index:50}
+.logo{font-size:20px;font-weight:800;letter-spacing:-1px}.logo em{color:#FFD700;font-style:normal}
+.tagline{font-size:10px;opacity:.6;margin-top:1px}
+.hdr-info{margin-left:auto;text-align:right;font-size:10px;opacity:.65;line-height:1.5}
+/* LAYOUT */
+.main{display:flex;height:calc(100vh - 54px)}
+/* LEFT */
+.lp{width:240px;background:white;border-right:1px solid #dde4ed;overflow-y:auto;padding:10px 8px;flex-shrink:0;display:flex;flex-direction:column;gap:10px}
+.lp::-webkit-scrollbar{width:3px}.lp::-webkit-scrollbar-thumb{background:#c5d0dc;border-radius:2px}
+.ft{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:#7c8fa6;margin-bottom:5px}
+/* SEGMENTS */
+.seg-wrap{display:flex;flex-direction:column;gap:2px}
+.sg{display:flex;align-items:center;gap:7px;padding:6px 9px;border:1.5px solid #e5eaf2;border-radius:7px;cursor:pointer;font-size:11.5px;font-weight:600;color:#374151;transition:all .15s;user-select:none}
+.sg:hover{border-color:#93c5fd;background:#f5f9ff}
+.sg.on{color:white;border-color:transparent}
+.sg.s0.on{background:#1a3a5c}.sg.s1.on{background:#0e7c54}.sg.s2.on{background:#6d28a8}.sg.s3.on{background:#c97b00}.sg.sa.on{background:#374151}
+.sg-ico{font-size:13px;flex-shrink:0}.sg-lbl{flex:1}.sg-cnt{font-size:9px;opacity:.6;background:rgba(0,0,0,.12);padding:1px 5px;border-radius:10px}
+/* DROPDOWN */
+.dd{position:relative}
+.dd-t{display:flex;align-items:center;justify-content:space-between;padding:6px 9px;border:1px solid #e5eaf2;border-radius:7px;cursor:pointer;font-size:11px;color:#374151;background:white;transition:all .12s;user-select:none;gap:5px}
+.dd-t:hover{border-color:#93c5fd;background:#f8fbff}
+.dd-t.open{border-color:#1a3a5c;border-radius:7px 7px 0 0}
+.dd-t-lbl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arr{font-size:9px;opacity:.45;transition:transform .2s;flex-shrink:0}
+.dd-t.open .arr{transform:rotate(180deg)}
+.dd-m{display:none;position:absolute;top:100%;left:0;right:0;background:white;border:1px solid #1a3a5c;border-top:none;border-radius:0 0 7px 7px;z-index:300;max-height:190px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.12)}
+.dd-m.open{display:block}
+.dd-sch{padding:5px 7px;border-bottom:1px solid #e5eaf2;position:sticky;top:0;background:white;z-index:1}
+.dd-sch input{width:100%;border:1px solid #e5eaf2;border-radius:5px;padding:3px 6px;font-size:11px;outline:none}
+.dd-sch input:focus{border-color:#93c5fd}
+.dd-all{display:flex;align-items:center;gap:6px;padding:5px 9px;cursor:pointer;font-size:11px;font-weight:600;color:#1a3a5c;border-bottom:1px solid #e5eaf2;transition:background .1s;background:white;position:sticky;top:34px;z-index:1}
+.dd-all.ns{top:0}
+.dd-all:hover,.dd-i:hover{background:#f0f7ff}
+.dd-all input,.dd-i input{accent-color:#1a3a5c;width:11px;height:11px;cursor:pointer;flex-shrink:0}
+.dd-i{display:flex;align-items:center;gap:6px;padding:4px 9px;cursor:pointer;font-size:11px;color:#374151;transition:background .1s}
+.dd-i.on{color:#1a3a5c;font-weight:500}
+/* MONTH */
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:2px}
+.mo{padding:4px 3px;border:1px solid #e5eaf2;border-radius:5px;background:white;cursor:pointer;font-size:10px;text-align:center;color:#374151;transition:all .12s;user-select:none}
+.mo:hover{background:#f0f7ff;border-color:#93c5fd}
+.mo.on{background:#1a3a5c;border-color:#1a3a5c;color:white;font-weight:600}
+/* FLIGHT */
+.fg{display:flex;flex-direction:column;gap:2px}
+.fb{padding:5px 9px;border:1px solid #e5eaf2;border-radius:6px;background:white;cursor:pointer;font-size:11px;text-align:left;color:#374151;transition:all .12s}
+.fb:hover{background:#f0f7ff;border-color:#93c5fd}
+.fb.on{background:#1a3a5c;border-color:#1a3a5c;color:white;font-weight:600}
+/* PROMO */
+.pr-item{display:flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid #e5eaf2;border-radius:5px;cursor:pointer;font-size:11px;color:#374151;transition:all .12s;user-select:none}
+.pr-item:hover{background:#f0f7ff;border-color:#93c5fd}
+.pr-item.on{background:#fffbe6;border-color:#f59e0b;color:#92400e;font-weight:600}
+.pr-item input{accent-color:#f59e0b;width:11px;height:11px;cursor:pointer;flex-shrink:0}
+.ptag{background:#fef3c7;color:#92400e;font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;margin-left:auto}
+/* MAX PRICE */
+.pi{width:100%;padding:5px 8px;border:1px solid #e5eaf2;border-radius:6px;font-size:11.5px;color:#374151;outline:none}
+.pi:focus{border-color:#1a3a5c}
+.rst{padding:6px;background:#fff0f0;color:#dc2626;border:1px solid #fecaca;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;width:100%}
+.rst:hover{background:#fee2e2}
+/* CENTER */
+.cp{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+/* AI BAR */
+.ai-bar{background:white;border-bottom:1px solid #dde4ed;padding:9px 12px}
+.ai-row{display:flex;gap:6px;align-items:center;background:#f8fafc;border:2px solid #e5eaf2;border-radius:10px;padding:3px 3px 3px 10px;transition:border-color .2s}
+.ai-row:focus-within{border-color:#1a3a5c;background:white}
+.ai-in{flex:1;border:none;background:transparent;font-size:12.5px;color:#1e293b;outline:none;padding:5px 0}
+.ai-in::placeholder{color:#a0adb8;font-size:12px}
+.ai-btn{background:#1a3a5c;color:white;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;transition:background .15s;white-space:nowrap}
+.ai-btn:hover{background:#0d5c8a}.ai-btn:disabled{background:#a0adb8;cursor:not-allowed}
+.chips{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}
+.chip{padding:3px 8px;background:#f0f7ff;border:1px solid #bdd7f5;border-radius:20px;font-size:10px;color:#1a3a5c;cursor:pointer;transition:all .12s;white-space:nowrap}
+.chip:hover{background:#1a3a5c;color:white;border-color:#1a3a5c}
+.ai-resp{background:#fffbf0;border-bottom:1px solid #f0e9cc;padding:7px 12px;display:none}
+.ai-resp.on{display:block}
+.ai-bub{background:white;border:1px solid #f0e9cc;border-left:3px solid #FFD700;border-radius:7px;padding:7px 11px;font-size:12px;line-height:1.6;max-height:75px;overflow-y:auto}
+/* RESULTS HEADER */
+.rh{padding:7px 12px 5px;display:flex;align-items:center;justify-content:space-between;background:white;border-bottom:1px solid #edf0f5;flex-shrink:0;gap:6px;flex-wrap:wrap}
+.rc{font-size:12px;color:#64748b}.rc strong{color:#1e293b;font-weight:700}.bp{color:#0d6e9e;font-weight:700}
+.sb{display:flex;gap:3px;align-items:center}
+.sl{font-size:10.5px;color:#7c8fa6}
+.sbt{padding:3px 7px;border:1px solid #e5eaf2;border-radius:5px;background:white;font-size:10.5px;cursor:pointer;color:#374151;transition:all .12s}
+.sbt.on{background:#1a3a5c;color:white;border-color:#1a3a5c}
+/* CARDS */
+.rl{flex:1;overflow-y:auto;padding:6px 10px;display:flex;flex-direction:column;gap:6px}
+.rl::-webkit-scrollbar{width:4px}.rl::-webkit-scrollbar-thumb{background:#c5d0dc;border-radius:2px}
+.card{background:white;border:1px solid #e5eaf2;border-radius:10px;overflow:hidden;transition:box-shadow .15s;border-left:4px solid #e5eaf2}
+.card:hover{box-shadow:0 3px 10px rgba(0,0,0,.08)}
+.card.best{border-left-color:#f59e0b}
+.c0{border-left-color:#1a3a5c}.c1{border-left-color:#0e7c54}.c2{border-left-color:#6d28a8}.c3{border-left-color:#c97b00}
+.card-body{padding:10px 12px;display:flex;gap:8px;align-items:flex-start}
+.card-left{flex:1;min-width:0}
+.bdgs{display:flex;align-items:center;gap:3px;margin-bottom:4px;flex-wrap:wrap}
+.b{font-size:8.5px;font-weight:700;padding:2px 5px;border-radius:3px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap}
+.b-best{background:#f59e0b;color:white}
+.b0{background:#e8eef5;color:#1a3a5c}.b1{background:#d6f5e8;color:#0e7c54}.b2{background:#f0d6f5;color:#6d28a8}.b3{background:#fff0d6;color:#c97b00}
+.b-promo{background:#fef3c7;color:#92400e}.b-land{background:#f1f5f9;color:#475569}
+.rname{font-size:13.5px;font-weight:700;color:#1e293b;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meta{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:3px}
+.mi{font-size:10.5px;color:#64748b}
+.t-dir{background:#dcfce7;color:#15803d;font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px}
+.t-stp{background:#fef9c3;color:#854d0e;font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px}
+.t-lo{background:#f1f5f9;color:#475569;font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px}
+.room{font-size:10px;color:#94a3b8}
+.card-right{flex-shrink:0;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:2px;min-width:120px}
+.price{font-size:21px;font-weight:800;color:#1a3a5c;line-height:1}
+.p-lbl{font-size:9px;font-weight:400;color:#7c8fa6}
+.p-tot{font-size:9.5px;color:#a0adb8}
+.r-link{font-size:9.5px;color:#3b82f6;text-decoration:none}
+.r-link:hover{text-decoration:underline}
+/* FLIGHT ACCORDION */
+.fl-tog{display:flex;align-items:center;gap:5px;padding:4px 12px;background:#f8fafc;border-top:1px solid #edf2f7;cursor:pointer;font-size:10.5px;color:#64748b;user-select:none}
+.fl-tog:hover{background:#f0f4f8;color:#1a3a5c}
+.fl-tog .ta{transition:transform .2s;font-size:9px;margin-left:auto}
+.fl-tog.open .ta{transform:rotate(180deg)}
+.fl-bd{display:none;padding:8px 12px 10px;background:#f8fafc;border-top:1px solid #edf2f7;gap:7px;flex-direction:column}
+.fl-bd.open{display:flex}
+.fl-leg{background:white;border:1px solid #e5eaf2;border-radius:7px;padding:8px 10px}
+.fl-lt{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#94a3b8;margin-bottom:6px}
+.fl-row{display:flex;align-items:center;gap:7px}
+.fl-t{font-size:14px;font-weight:700;color:#1e293b;line-height:1}
+.fl-d{font-size:9.5px;color:#94a3b8;margin-top:1px}
+.fl-mid{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px}
+.fl-co{font-size:10.5px;font-weight:600;color:#1a3a5c;background:#eef6ff;padding:2px 6px;border-radius:3px}
+.fl-ln{width:100%;height:1px;background:#e5eaf2;position:relative;margin:2px 0}
+.fl-ln::after{content:"›";position:absolute;right:-4px;top:-8px;color:#94a3b8;font-size:13px}
+.fl-si{font-size:9.5px;color:#94a3b8}
+.fl-none{font-size:11px;color:#94a3b8;font-style:italic}
+/* LOADING */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:260px;color:#a0adb8;gap:10px;text-align:center}
+.lw{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:#64748b}
+.sp{width:32px;height:32px;border:3px solid #e5eaf2;border-top-color:#1a3a5c;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.pb{width:200px;height:4px;background:#e5eaf2;border-radius:2px;overflow:hidden}
+.pf{height:100%;background:linear-gradient(90deg,#1a3a5c,#0d6e9e);border-radius:2px;transition:width .3s}
+
+.load-screen{position:fixed;inset:0;background:linear-gradient(135deg,#1a3a5c,#0d6e9e);display:flex;align-items:center;justify-content:center;z-index:1000}
+.load-box{background:white;border-radius:20px;padding:40px 48px;text-align:center;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.load-logo{font-size:28px;font-weight:800;letter-spacing:-1px;margin-bottom:6px}
+.load-logo em{color:#FFD700;font-style:normal}
+.load-sub{font-size:12px;color:#64748b;margin-bottom:24px}
+.load-ico{font-size:48px;margin-bottom:12px;animation:pulse 1.5s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+.load-msg{font-size:14px;font-weight:600;color:#1e293b;margin-bottom:8px}
+.load-hint{font-size:11.5px;color:#94a3b8;margin-bottom:16px}
+.pb{width:100%;height:6px;background:#e5eaf2;border-radius:3px;overflow:hidden}
+.pf{height:100%;background:linear-gradient(90deg,#1a3a5c,#0d6e9e);border-radius:3px;transition:width .4s;width:5%}
+.load-error{background:#fee2e2;color:#dc2626;border-radius:8px;padding:10px 14px;font-size:12px;margin-top:14px;display:none;line-height:1.6}
+.load-error.show{display:block}
+.retry-btn{margin-top:12px;padding:8px 20px;background:#1a3a5c;color:white;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;display:none}
+.retry-btn.show{display:inline-block}
+.reload-btn{position:fixed;top:12px;right:14px;z-index:500;background:rgba(255,255,255,.15);color:white;border:1px solid rgba(255,255,255,.3);border-radius:7px;padding:5px 11px;font-size:11px;font-weight:600;cursor:pointer}
+.reload-btn:hover{background:rgba(255,255,255,.25)}
+</style>
+</head>
+<body>
+
+<div class="load-screen" id="loadScreen">
+  <div class="load-box">
+    <div class="load-logo">Club<em>Med</em> <span style="font-weight:300;font-size:18px;color:#64748b">Offers</span></div>
+    <div class="load-sub">Smart Pricing Engine — Sales Team</div>
+    <div class="load-ico">📊</div>
+    <div class="load-msg" id="loadMsg">Loading today's offers...</div>
+    <div class="load-hint" id="loadHint">Fetching data from GitHub</div>
+    <div class="pb"><div class="pf" id="PF"></div></div>
+    <div class="load-error" id="loadError"></div>
+    <button class="retry-btn" id="retryBtn" onclick="loadData()">🔄 Retry</button>
+  </div>
+</div>
+
+<div id="appWrap" style="display:none">
+<button class="reload-btn" onclick="loadData()">🔄 Refresh</button>
+<div class="hdr">
+  <div>
+    <div class="logo">Club<em>Med</em> <span style="font-weight:300;font-size:13px;opacity:.8">Offers</span></div>
+    <div class="tagline">Smart Pricing Engine — Sales Team</div>
+  </div>
+  <div class="hdr-info" id="DS">—<br><span>EUR · /pp · 2 pax</span></div>
+</div>
+<div class="main">
+<div class="lp">
+  <div>
+    <div class="ft">🏷 Segment</div>
+    <div class="seg-wrap">
+      <div class="sg sa on" data-sg="a" onclick="setSg(this)"><span class="sg-ico">🌐</span><span class="sg-lbl">All segments</span><span class="sg-cnt" id="ca">—</span></div>
+      <div class="sg s0" data-sg="0" onclick="setSg(this)"><span class="sg-ico">⛷️</span><span class="sg-lbl">Ski</span><span class="sg-cnt" id="c0">—</span></div>
+      <div class="sg s3" data-sg="3" onclick="setSg(this)"><span class="sg-ico">🏔️</span><span class="sg-lbl">Summer Mountain</span><span class="sg-cnt" id="c3">—</span></div>
+      <div class="sg s1" data-sg="1" onclick="setSg(this)"><span class="sg-ico">🏖️</span><span class="sg-lbl">Short Haul</span><span class="sg-cnt" id="c1">—</span></div>
+      <div class="sg s2" data-sg="2" onclick="setSg(this)"><span class="sg-ico">✈️</span><span class="sg-lbl">Long Haul</span><span class="sg-cnt" id="c2">—</span></div>
+    </div>
+  </div>
+  <div>
+    <div class="ft">📅 Departure Week (Sun–Sat)</div>
+    <div class="dd" id="wDrop">
+      <div class="dd-t" id="wTrig" onclick="tDD('w')"><span class="dd-t-lbl" id="wLbl">All weeks</span><span class="arr">▼</span></div>
+      <div class="dd-m" id="wMenu" style="max-height:200px">
+        <div class="dd-all ns" onclick="tAllDD('w')"><input type="checkbox" id="wACb" checked />All weeks</div>
+        <div id="wItems"></div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="ft">🗓 Departure Month</div>
+    <div class="mgrid" id="MG"></div>
+  </div>
+  <div>
+    <div class="ft">🏨 Resort</div>
+    <div class="dd" id="rDrop">
+      <div class="dd-t" id="rTrig" onclick="tDD('r')"><span class="dd-t-lbl" id="rLbl">All resorts</span><span class="arr">▼</span></div>
+      <div class="dd-m" id="rMenu">
+        <div class="dd-sch"><input type="text" id="rSch" placeholder="Search..." oninput="fDD('r')" /></div>
+        <div class="dd-all" onclick="tAllDD('r')"><input type="checkbox" id="rACb" checked />All resorts</div>
+        <div id="rItems"></div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="ft">🌍 Destination</div>
+    <div class="dd" id="dDrop">
+      <div class="dd-t" id="dTrig" onclick="tDD('d')"><span class="dd-t-lbl" id="dLbl">All destinations</span><span class="arr">▼</span></div>
+      <div class="dd-m" id="dMenu">
+        <div class="dd-sch"><input type="text" id="dSch" placeholder="Search..." oninput="fDD('d')" /></div>
+        <div class="dd-all" onclick="tAllDD('d')"><input type="checkbox" id="dACb" checked />All destinations</div>
+        <div id="dItems"></div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="ft">✈ Flight Type</div>
+    <div class="fg">
+      <button class="fb on" data-fl="a" onclick="setFl(this)">All (flight + land only)</button>
+      <button class="fb" data-fl="d" onclick="setFl(this)">✅ Direct flights only</button>
+      <button class="fb" data-fl="1" onclick="setFl(this)">1 stop</button>
+      <button class="fb" data-fl="2" onclick="setFl(this)">2+ stops</button>
+      <button class="fb" data-fl="f" onclick="setFl(this)">All flights (any stops)</button>
+      <button class="fb" data-fl="l" onclick="setFl(this)">🏨 Land Only (no flight)</button>
+    </div>
+  </div>
+  <div>
+    <div class="ft">🎟 Promo Code</div>
+    <div id="PW" style="display:flex;flex-direction:column;gap:2px"></div>
+  </div>
+  <div>
+    <div class="ft">💶 Max price / person (€)</div>
+    <input type="number" class="pi" id="MP" placeholder="e.g. 3000" oninput="af()" />
+  </div>
+  <button class="rst" onclick="resetAll()">🔄 Reset all filters</button>
+</div>
+<div class="cp">
+  <div class="ai-bar">
+    <div class="ai-row">
+      <span style="font-size:14px;flex-shrink:0">🤖</span>
+      <input class="ai-in" id="aiIn" placeholder="Best direct flight April... Cheapest ski January..." />
+      <button class="ai-btn" id="aiBtn" onclick="askAI()">Analyze ↗</button>
+    </div>
+    <div class="chips">
+      <span class="chip" onclick="sA(this)">Best price direct April</span>
+      <span class="chip" onclick="sA(this)">Cheapest ski January</span>
+      <span class="chip" onclick="sA(this)">Long haul under €2000</span>
+      <span class="chip" onclick="sA(this)">Best Maldives offer</span>
+      <span class="chip" onclick="sA(this)">Summer mountain July</span>
+    </div>
+  </div>
+  <div class="ai-resp" id="AR"><div class="ai-bub" id="AB"></div></div>
+  <div class="rh">
+    <div class="rc" id="RC">—</div>
+    <div class="sb">
+      <span class="sl">Sort:</span>
+      <button class="sbt on" onclick="doSort('p',this)">Price ↑</button>
+      <button class="sbt" onclick="doSort('d',this)">Date</button>
+      <button class="sbt" onclick="doSort('r',this)">Resort</button>
+    </div>
+  </div>
+  <div class="rl" id="RL">
+    <div class="empty"><div style="font-size:32px">📊</div><p style="font-weight:600;color:#374151;margin-top:8px">Loading...</p></div>
+  </div>
+</div>
+</div>
+</div>
+
+<script>
+// GitHub API supports CORS from any origin
+const GITHUB_API = "https://api.github.com/repos/mtoledano10/clubmed/contents/OFFERS.xlsx";
+
+const MO = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const FLAGS = {Maldives:"🇲🇻","Dominican Republic":"🇩🇴",Thailand:"🇹🇭",Mauritius:"🇲🇺",Mexico:"🇲🇽","The  Seychelles":"🇸🇨",Seychelles:"🇸🇨",Spain:"🇪🇸",France:"🇫🇷",Portugal:"🇵🇹",Italy:"🇮🇹",Morocco:"🇲🇦",Greece:"🇬🇷",Turkey:"🇹🇷"};
+const SEGS = ["SKI","SHORT HAUL","LONG HAUL","SUMMER MOUNTAIN"];
+const SBCLS = ["b0","b1","b2","b3"];
+const SCCLS = ["c0","c1","c2","c3"];
+const SKI_R = ["Alpe d'Huez","Grand Massif Samoens Morillon","La Plagne 2100","La Rosiere","Les Arcs Panorama","Peisey-Vallandry","Pragelato Sestriere","Serre Chevalier","Tignes","Val Thorens Sensations","Val d'Isere","Valmorel"];
+const LONG_R = ["Cancun","Kani","La Plantation d'Albion Club Med","La Pointe aux Canonniers","Miches Playa Esmeralda","Phuket","Punta Cana","Seychelles","The Finolhu Villas"];
+
+let R=[],C=[],U=[],ALL=[],FD=[];
+let AW=new Set(),AM=new Set(),AR=new Set(),AD=new Set(),APROM=new Set();
+let ASG="a",AFL="a",SORT="p",DC=0;
+const PAGE=60;
+
+async function loadData(){
+  document.getElementById("loadScreen").style.display="flex";
+  document.getElementById("appWrap").style.display="none";
+  document.getElementById("loadError").classList.remove("show");
+  document.getElementById("retryBtn").classList.remove("show");
+  setP("Connecting...",10);
+
+  try{
+    setP("Downloading from GitHub...", 25);
+    document.getElementById("loadHint").textContent = "via GitHub API";
+    const resp = await fetch(GITHUB_API + "?t=" + Date.now(), {
+      headers: { "Accept": "application/vnd.github.v3.raw" }
+    });
+    if(!resp.ok) throw new Error("HTTP " + resp.status + " — check OFFERS.xlsx is in your repo");
+    setP("Reading data...", 55);
+    const buffer = await resp.arrayBuffer();
+    setP("Processing...", 75);
+    await new Promise(r=>setTimeout(r,30));
+    parseExcel(buffer);
+  }catch(e){
+    showErr("Could not load OFFERS.xlsx.<br>Error: "+e.message+"<br><br>Make sure <strong>OFFERS.xlsx</strong> is in <strong>mtoledano10/clubmed</strong> on GitHub.");
+  }
+}
+
+function setP(msg,pct){
+  document.getElementById("loadMsg").textContent=msg;
+  document.getElementById("PF").style.width=pct+"%";
+}
+function showErr(msg){
+  document.getElementById("loadMsg").textContent="Failed to load";
+  document.getElementById("PF").style.width="0%";
+  document.getElementById("loadHint").textContent="";
+  const el=document.getElementById("loadError");
+  el.innerHTML="⚠️ "+msg;
+  el.classList.add("show");
+  document.getElementById("retryBtn").classList.add("show");
+}
+
+function excelDateToStr(v){
+  if(!v) return "";
+  if(typeof v==="string") return v.slice(0,10);
+  return new Date(Math.round((v-25569)*86400*1000)).toISOString().slice(0,10);
+}
+function excelTime(v){
+  if(!v||typeof v==="string") return "";
+  const d=new Date(Math.round((v-25569)*86400*1000));
+  return String(d.getUTCHours()).padStart(2,"0")+":"+String(d.getUTCMinutes()).padStart(2,"0");
+}
+function excelMMDD(v){
+  if(!v||typeof v==="string") return "";
+  const d=new Date(Math.round((v-25569)*86400*1000));
+  return String(d.getUTCMonth()+1).padStart(2,"0")+"-"+String(d.getUTCDate()).padStart(2,"0");
+}
+
+function parseExcel(buffer){
+  try{
+    const wb=XLSX.read(buffer,{type:"array",cellDates:false});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{raw:true,defval:""});
+    setP("Filtering...",82);
+    const resortSet=new Set(),countrySet=new Set(),urlMap={};
+    const filtered=rows.filter(r=>parseInt(r["Occupancy"])===2);
+    if(!filtered.length) throw new Error("No rows with Occupancy=2 found. Check Excel format.");
+    filtered.forEach(r=>{
+      if(r["Resort Name"]) resortSet.add(r["Resort Name"]);
+      if(r["Country"]) countrySet.add(r["Country"]);
+      if(r["Resort Name"]&&r["Resort Page URL"]&&!urlMap[r["Resort Name"]]) urlMap[r["Resort Name"]]=r["Resort Page URL"];
+    });
+    R=[...resortSet].sort(); C=[...countrySet].sort(); U=R.map(r=>urlMap[r]||"");
+    const ri=Object.fromEntries(R.map((r,i)=>[r,i]));
+    const ci=Object.fromEntries(C.map((c,i)=>[c,i]));
+    setP("Building index...",92);
+    ALL=filtered.map(row=>{
+      const rname=row["Resort Name"]||"";
+      const dep=row["Date de depart"];
+      const depStr=excelDateToStr(dep);
+      const depD=dep&&typeof dep!=="string"?new Date(Math.round((dep-25569)*86400*1000)):null;
+      const dm=depD?depD.getUTCMonth()+1:0, dy=depD?depD.getUTCFullYear():0;
+      let ws="";
+      if(depD){const day=depD.getUTCDay();const sun=new Date(depD);sun.setUTCDate(depD.getUTCDate()-day);ws=sun.toISOString().slice(0,10);}
+      let sg=1;
+      if(SKI_R.includes(rname)) sg=(dm===7||dm===8)?3:0;
+      else if(LONG_R.includes(rname)) sg=2;
+      const lo=(!row["Departure point"]||!String(row["Departure point"]).trim())?1:0;
+      return{
+        ri:ri[rname]??0, ci:ci[row["Country"]]??0,
+        dd:depStr, pp:parseInt(row["New price/person"])||0, tp:parseInt(row["New total price"])||0,
+        rt:String(row["Room type"]||""), dur:parseInt(row["Duration"])||7,
+        os:parseInt(row["Outbound number of stops"])||0, ins:parseInt(row["Inbound number of stops"])||0,
+        oc:String(row["Outbound company code"]||""),
+        of:row["Outbound flight number"]?String(Math.round(row["Outbound flight number"])):"",
+        od:excelTime(row["Outbound departure Date"]), oda:excelMMDD(row["Outbound departure Date"]),
+        oa:excelTime(row["Outbound arrival date"]), oaa:excelMMDD(row["Outbound arrival date"]),
+        ic:String(row["Inbound company code"]||""),
+        iif:row["Inbound flight number"]?String(Math.round(row["Inbound flight number"])):"",
+        id:excelTime(row["Inbound departure Date"]), ida:excelMMDD(row["Inbound departure Date"]),
+        ia:excelTime(row["Inbound arrival date"]), iaa:excelMMDD(row["Inbound arrival date"]),
+        pr:String(row["Offer code"]||""), lo, dm, dy, ws, sg
+      };
+    });
+    setP("Done! "+ALL.length.toLocaleString()+" offers ready",100);
+    setTimeout(()=>{
+      document.getElementById("loadScreen").style.display="none";
+      document.getElementById("appWrap").style.display="block";
+      document.getElementById("DS").innerHTML=ALL.length.toLocaleString()+" offers<br><span style='opacity:.5'>EUR · /pp · 2 pax</span>";
+      resetFiltersState(); buildFilters(); af();
+    },300);
+  }catch(e){ showErr(e.message); }
+}
+
+function resetFiltersState(){
+  AW=new Set();AM=new Set();AR=new Set();AD=new Set();APROM=new Set();
+  ASG="a";AFL="a";SORT="p";DC=0;
+  document.querySelectorAll("[data-sg]").forEach(b=>b.classList.remove("on"));
+  document.querySelector("[data-sg='a']").classList.add("on");
+  document.querySelectorAll(".mo").forEach(el=>el.classList.remove("on"));
+  document.querySelectorAll("[data-fl]").forEach(b=>b.classList.remove("on"));
+  document.querySelector("[data-fl='a']").classList.add("on");
+  document.getElementById("MP").value="";
+  document.querySelectorAll(".sbt").forEach(b=>b.classList.remove("on"));
+  document.querySelector(".sbt").classList.add("on");
+  ["w","r","d"].forEach(id=>{ const el=document.getElementById(id+"Items"); if(el) el.innerHTML=""; });
+  document.getElementById("MG").innerHTML="";
+  document.getElementById("PW").innerHTML="";
+}
+
+/* ── BUILD FILTERS ── */
+function buildFilters(){
+  const sc={0:0,1:0,2:0,3:0};
+  ALL.forEach(r=>{sc[r.sg]=(sc[r.sg]||0)+1;});
+  document.getElementById('ca').textContent=ALL.length.toLocaleString();
+  document.getElementById('c0').textContent=(sc[0]||0).toLocaleString();
+  document.getElementById('c3').textContent=(sc[3]||0).toLocaleString();
+  document.getElementById('c1').textContent=(sc[1]||0).toLocaleString();
+  document.getElementById('c2').textContent=(sc[2]||0).toLocaleString();
+
+  // Weeks
+  const wm=new Map();
+  ALL.forEach(r=>{if(!wm.has(r.ws))wm.set(r.ws,0);wm.set(r.ws,wm.get(r.ws)+1);});
+  const wc = document.getElementById("wItems");
+  wc.innerHTML = "";
+  [...wm.entries()].sort().forEach(([ws2,cnt]) => {
+    const d2=new Date(ws2+"T12:00:00"), e2=new Date(ws2+"T12:00:00"); e2.setDate(d2.getDate()+6);
+    const lbl2=MO[d2.getMonth()]+" "+d2.getDate()+" - "+MO[e2.getMonth()]+" "+e2.getDate()+" "+d2.getFullYear();
+    const el2=document.createElement("div");
+    el2.className="dd-i on wk-item"; el2.dataset.v=ws2;
+    el2.innerHTML='<input type="checkbox" checked /><span style="flex:1">'+lbl2+'</span><span style="font-size:9px;opacity:.4">'+cnt+"</span>";
+    el2.querySelector("input").addEventListener("click",function(e){e.stopPropagation();tDDI("w",this.closest(".dd-i"));});
+    wc.appendChild(el2);
+  });
+    [...wm.keys()].forEach(ws=>AW.add(ws));
+  updLbl('w');
+
+  // Months
+  const mm=new Map();
+  ALL.forEach(r=>{const k=r.dy+'-'+String(r.dm).padStart(2,'0');if(!mm.has(k))mm.set(k,{y:r.dy,m:r.dm});});
+  document.getElementById('MG').innerHTML=[...mm.entries()].sort().map(([k,v])=>
+    '<div class="mo" data-mk="'+k+'" onclick="tMo(this)">'+MO[v.m-1]+' '+String(v.y).slice(2)+'</div>'
+  ).join('');
+
+  // Resorts
+  R.forEach(r=>AR.add(r));
+  const rc2 = document.getElementById("rItems");
+  rc2.innerHTML = "";
+  R.forEach((r2,i2) => {
+    const el3=document.createElement("div");
+    el3.className="dd-i on r-item"; el3.dataset.v=String(i2);
+    el3.innerHTML='<input type="checkbox" checked /><span>'+r2+"</span>";
+    el3.querySelector("input").addEventListener("click",function(e){e.stopPropagation();tDDI("r",this.closest(".dd-i"));});
+    rc2.appendChild(el3);
+  });
+    updLbl('r');
+
+  // Destinations
+  C.forEach(c=>AD.add(c));
+  const dc2 = document.getElementById("dItems");
+  dc2.innerHTML = "";
+  C.forEach((c2,i3) => {
+    const flag2=FLAGS[c2]||"🌍";
+    const el4=document.createElement("div");
+    el4.className="dd-i on d-item"; el4.dataset.v=String(i3);
+    el4.innerHTML='<input type="checkbox" checked />'+flag2+" "+c2;
+    el4.querySelector("input").addEventListener("click",function(e){e.stopPropagation();tDDI("d",this.closest(".dd-i"));});
+    dc2.appendChild(el4);
+  });
+    updLbl('d');
+
+  // Promos - build with DOM to avoid quote issues
+  const promos=[...new Set(ALL.map(r=>r.pr).filter(Boolean))].sort();
+  promos.forEach(p=>APROM.add(p));
+  APROM.add("__n");
+  const pw = document.getElementById("PW");
+  pw.innerHTML = "";
+  const mkPr = (p, label, isPromo) => {
+    const d = document.createElement("div");
+    d.className = "pr-item on";
+    d.dataset.p = p;
+    d.innerHTML = '<input type="checkbox" checked />' + label + (isPromo ? '<span class="ptag">PROMO</span>' : '');
+    d.addEventListener("click", function(e){ e.stopPropagation(); tPr(this); });
+    d.querySelector("input").addEventListener("click", function(e){ e.stopPropagation(); tPr(this.closest(".pr-item")); });
+    return d;
+  };
+  pw.appendChild(mkPr("__a", "All offers", false));
+  promos.forEach(p => pw.appendChild(mkPr(p, p, true)));
+  pw.appendChild(mkPr("__n", "No promo", false));
+}
+
+
+/* ── EVENT DELEGATION FOR DROPDOWN ITEMS ── */
+document.addEventListener("click", function(e) {
+  const wi = e.target.closest(".wk-item");
+  const ri2 = e.target.closest(".r-item");
+  const di = e.target.closest(".d-item");
+  if(wi) { e.stopPropagation(); tDDI("w", wi); return; }
+  if(ri2) { e.stopPropagation(); tDDI("r", ri2); return; }
+  if(di) { e.stopPropagation(); tDDI("d", di); return; }
+});
+
+/* ── CONTROLS ── */
+function setSg(btn){document.querySelectorAll('[data-sg]').forEach(b=>b.classList.remove('on'));btn.classList.add('on');ASG=btn.dataset.sg;af();}
+function tMo(el){const k=el.dataset.mk;if(AM.has(k)){AM.delete(k);el.classList.remove('on');}else{AM.add(k);el.classList.add('on');}af();}
+function setFl(btn){document.querySelectorAll('[data-fl]').forEach(b=>b.classList.remove('on'));btn.classList.add('on');AFL=btn.dataset.fl;af();}
+
+function tPr(el){
+  const p=el.dataset.p,cb=el.querySelector('input');
+  const items=document.querySelectorAll('[data-p]');
+  if(p==='__a'){
+    const allOn=[...items].filter(x=>x.dataset.p!=='__a').every(x=>x.classList.contains('on'));
+    APROM.clear();
+    items.forEach(x=>{const c2=x.querySelector('input');
+      if(allOn){x.classList.remove('on');if(c2)c2.checked=false;}
+      else{x.classList.add('on');if(c2)c2.checked=true;if(x.dataset.p!=='__a')APROM.add(x.dataset.p);}
+    });
+  }else{
+    if(APROM.has(p)){APROM.delete(p);el.classList.remove('on');if(cb)cb.checked=false;}
+    else{APROM.add(p);el.classList.add('on');if(cb)cb.checked=true;}
+    const allEl=document.querySelector('[data-p="__a"]');
+    const real=[...document.querySelectorAll('[data-p]:not([data-p="__a"])')];
+    const allOn=real.every(x=>x.classList.contains('on'));
+    if(allEl){allEl.classList.toggle('on',allOn);const ac=allEl.querySelector('input');if(ac)ac.checked=allOn;}
+  }
+  af();
+}
+
+/* ── DROPDOWN ── */
+function tDD(id){
+  const ids=['w','r','d'];
+  const t=document.getElementById(id+'Trig'),m=document.getElementById(id+'Menu');
+  const was=m.classList.contains('open');
+  ids.forEach(x=>{document.getElementById(x+'Trig').classList.remove('open');document.getElementById(x+'Menu').classList.remove('open');});
+  if(!was){t.classList.add('open');m.classList.add('open');const s=document.getElementById(id+'Sch');if(s)setTimeout(()=>s.focus(),40);}
+}
+document.addEventListener('click',e=>{
+  ['w','r','d'].forEach(id=>{
+    const drop=document.getElementById(id+'Drop');
+    if(drop&&!drop.contains(e.target)){document.getElementById(id+'Trig').classList.remove('open');document.getElementById(id+'Menu').classList.remove('open');}
+  });
+});
+function fDD(id){
+  const q=document.getElementById(id+'Sch').value.toLowerCase();
+  document.querySelectorAll('#'+id+'Items .dd-i').forEach(el=>{
+    const txt=(id==='r'?R[parseInt(el.dataset.v)]:C[parseInt(el.dataset.v)])||el.dataset.v;
+    el.style.display=txt.toLowerCase().includes(q)?'':'none';
+  });
+}
+function tDDI(id,el){
+  const v=el.dataset.v,cb=el.querySelector('input');
+  const set=id==='w'?AW:id==='r'?AR:AD;
+  const key=id==='w'?v:id==='r'?R[parseInt(v)]:C[parseInt(v)];
+  if(set.has(key)){set.delete(key);el.classList.remove('on');if(cb)cb.checked=false;}
+  else{set.add(key);el.classList.add('on');if(cb)cb.checked=true;}
+  updLbl(id);af();
+}
+function tAllDD(id){
+  const set=id==='w'?AW:id==='r'?AR:AD;
+  const items=document.querySelectorAll('#'+id+'Items .dd-i');
+  const allOn=id==='w'?set.size===items.length:(id==='r'?set.size===R.length:set.size===C.length);
+  items.forEach(el=>{
+    const v=el.dataset.v,cb=el.querySelector('input');
+    const key=id==='w'?v:id==='r'?R[parseInt(v)]:C[parseInt(v)];
+    if(allOn){set.delete(key);el.classList.remove('on');if(cb)cb.checked=false;}
+    else{set.add(key);el.classList.add('on');if(cb)cb.checked=true;}
+  });
+  updLbl(id);af();
+}
+function updLbl(id){
+  const set=id==='w'?AW:id==='r'?AR:AD;
+  const tot=id==='w'?document.querySelectorAll('#wItems .dd-i').length:id==='r'?R.length:C.length;
+  const lbl=document.getElementById(id+'Lbl'),acb=document.getElementById(id+'ACb');
+  if(set.size===0||set.size===tot)lbl.textContent=id==='w'?'All weeks':id==='r'?'All resorts ('+tot+')':'All destinations ('+tot+')';
+  else lbl.textContent=set.size+(id==='w'?' wk'+(set.size>1?'s':'')+' selected':id==='r'?' resort'+(set.size>1?'s':'')+' selected':' dest. selected');
+  if(acb)acb.checked=set.size===tot||set.size===0;
+}
+
+/* ── APPLY FILTERS ── */
+function af(){
+  const maxP=parseFloat(document.getElementById('MP').value)||Infinity;
+  // Resort and dest sets use names
+  const useAR=AR.size>0&&AR.size<R.length;
+  const useAD=AD.size>0&&AD.size<C.length;
+  FD=ALL.filter(r=>{
+    if(ASG!=='a'&&r.sg!==parseInt(ASG))return false;
+    if(AW.size>0&&AW.size<document.querySelectorAll('#wItems .dd-i').length&&!AW.has(r.ws))return false;
+    if(AM.size>0){const k=r.dy+'-'+String(r.dm).padStart(2,'0');if(!AM.has(k))return false;}
+    if(useAR&&!AR.has(R[r.ri]))return false;
+    if(useAD&&!AD.has(C[r.ci]))return false;
+    if(AFL==='l'&&!r.lo)return false;
+    if(AFL==='f'&&r.lo)return false;
+    if(AFL==='d'&&(r.lo||r.os!==0))return false;
+    if(AFL==='1'&&(r.lo||r.os!==1))return false;
+    if(AFL==='2'&&(r.lo||r.os<2))return false;
+    if(APROM.size>0){
+      const wN=APROM.has('__n'),wC=r.pr&&APROM.has(r.pr);
+      if(!(wC||(wN&&!r.pr)))return false;
+    }
+    if(r.pp>maxP)return false;
+    return true;
+  });
+  sortData();
+}
+
+function sortData(){
+  if(SORT==='p')FD.sort((a,b)=>a.pp-b.pp);
+  else if(SORT==='d')FD.sort((a,b)=>a.dd.localeCompare(b.dd));
+  else FD.sort((a,b)=>R[a.ri].localeCompare(R[b.ri]));
+  DC=0;render();
+}
+function doSort(t,btn){SORT=t;document.querySelectorAll('.sbt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');sortData();}
+
+/* ── RENDER ── */
+function render(){
+  const list=document.getElementById('RL');list.innerHTML='';
+  if(!FD.length){
+    list.innerHTML='<div class="empty"><div style="font-size:28px">🔍</div><p style="font-weight:600;color:#374151;margin-top:4px">No offers found</p><p style="font-size:11px">Try adjusting the filters</p></div>';
+    document.getElementById('RC').innerHTML='<strong>0</strong> offers';return;
+  }
+  const best=FD[0];
+  document.getElementById('RC').innerHTML='<strong>'+FD.length.toLocaleString()+'</strong> offers &nbsp;·&nbsp; Best: <span class="bp">€'+best.pp.toLocaleString()+'/pp</span> — '+R[best.ri];
+  FD.slice(0,PAGE).forEach((r,i)=>list.appendChild(mkCard(r,i===0)));
+  DC=Math.min(PAGE,FD.length);
+  if(FD.length>PAGE){
+    const b=document.createElement('button');
+    b.textContent='Load more — '+(FD.length-PAGE).toLocaleString()+' remaining';
+    b.style.cssText='width:100%;padding:9px;background:#f0f7ff;border:1px dashed #93c5fd;border-radius:8px;font-size:12px;color:#1a3a5c;font-weight:600;cursor:pointer;';
+    b.onclick=loadMore;list.appendChild(b);
+  }
+}
+function loadMore(){
+  const list=document.getElementById('RL'),btn=list.querySelector('[style*="dashed"]');
+  FD.slice(DC,DC+PAGE).forEach(r=>list.insertBefore(mkCard(r,false),btn));
+  DC+=PAGE;
+  if(DC>=FD.length)btn.remove();
+  else btn.textContent='Load more — '+(FD.length-DC).toLocaleString()+' remaining';
+}
+
+function fmtDt(t,d){
+  if(!t)return'—';
+  const mo=d?d.split('-'):null;
+  return t+(mo?(' <span style="font-size:9px;color:#94a3b8">'+MO[parseInt(mo[0])-1]+' '+mo[1]+'</span>'):'');
+}
+
+function mkCard(r,best){
+  const id='c'+Math.random().toString(36).slice(2,9);
+  const div=document.createElement('div');
+  const rname=R[r.ri],country=C[r.ci],flag=FLAGS[country]||'🌍';
+  const sbc=SBCLS[r.sg]||'b1';
+  div.className='card '+SCCLS[r.sg]+(best?' best':'');
+
+  let ftag='';
+  if(r.lo)ftag='<span class="t-lo">🏨 Land Only</span>';
+  else if(r.os===0)ftag='<span class="t-dir">✈ Direct</span>';
+  else ftag='<span class="t-stp">'+r.os+' stop'+(r.os>1?'s':'')+'</span>';
+
+  const promo=r.pr?'<span class="b b-promo">🎟 '+r.pr+'</span>':'';
+  const link=U[r.ri]?'<a class="r-link" href="'+U[r.ri]+'" target="_blank">Resort ↗</a>':'';
+
+  // Flight legs
+  let outH='',inH='';
+  if(r.lo){
+    outH='<div class="fl-leg"><p class="fl-none">🏨 Land only — no flight included</p></div>';
+  }else if(r.oc||r.od){
+    outH='<div class="fl-leg"><div class="fl-lt">✈ Outbound'+(r.oc?' · '+r.oc:'')+(r.of?' #'+r.of:'')+(r.os===0?' · Non-stop':' · '+r.os+' stop(s)')+'</div>'
+      +'<div class="fl-row">'
+      +'<div><div class="fl-t">'+r.od+'</div><div class="fl-d">'+r.oda+'</div></div>'
+      +'<div class="fl-mid"><span class="fl-co">'+(r.oc||'?')+'</span><div class="fl-ln"></div><span class="fl-si">'+(r.os===0?'Non-stop':r.os+' stop(s)')+'</span></div>'
+      +'<div style="text-align:right"><div class="fl-t">'+r.oa+'</div><div class="fl-d">'+r.oaa+'</div></div>'
+      +'</div></div>';
+  }else{
+    outH='<div class="fl-leg"><div class="fl-lt">✈ Outbound</div><p class="fl-none">Flight details not available</p></div>';
+  }
+  if(!r.lo){
+    if(r.ic||r.id){
+      inH='<div class="fl-leg"><div class="fl-lt">↩ Return'+(r.ic?' · '+r.ic:'')+(r.iif?' #'+r.iif:'')+(r.ins===0?' · Non-stop':' · '+r.ins+' stop(s)')+'</div>'
+        +'<div class="fl-row">'
+        +'<div><div class="fl-t">'+r.id+'</div><div class="fl-d">'+r.ida+'</div></div>'
+        +'<div class="fl-mid"><span class="fl-co">'+(r.ic||'?')+'</span><div class="fl-ln"></div><span class="fl-si">'+(r.ins===0?'Non-stop':r.ins+' stop(s)')+'</span></div>'
+        +'<div style="text-align:right"><div class="fl-t">'+r.ia+'</div><div class="fl-d">'+r.iaa+'</div></div>'
+        +'</div></div>';
+    }else{
+      inH='<div class="fl-leg"><div class="fl-lt">↩ Return</div><p class="fl-none">Flight details not available</p></div>';
+    }
+  }
+
+  div.innerHTML=
+    '<div class="card-body">'
+    +'<div class="card-left">'
+    +'<div class="bdgs">'+(best?'<span class="b b-best">⭐ Best</span>':'')+'<span class="b '+sbc+'">'+SEGS[r.sg]+'</span>'+promo+'</div>'
+    +'<div class="rname">'+rname+'</div>'
+    +'<div class="meta">'
+    +'<span class="mi">📅 '+r.dd+'</span>'
+    +'<span class="mi">🌙 '+r.dur+'n</span>'
+    +ftag
+    +'<span class="mi">'+flag+' '+country+'</span>'
+    +'</div>'
+    +'<div class="room">🛏 '+r.rt+'</div>'
+    +'</div>'
+    +'<div class="card-right">'
+    +'<div><span class="price">€'+r.pp.toLocaleString()+'</span><span class="p-lbl"> /pp</span></div>'
+    +'<div class="p-tot">Total: €'+r.tp.toLocaleString()+'</div>'
+    +link
+    +'</div>'
+    +'</div>'
+    +'<div class="fl-tog" id="ft-'+id+'" data-fid="'+id+'">'
+    +'✈ Flight details<span class="ta">▼</span>'
+    +'</div>'
+    +'<div class="fl-bd" id="fb-'+id+'">'+outH+inH+'</div>';
+  return div;
+}
+
+
+document.addEventListener("click", function(e2){
+  const tog = e2.target.closest(".fl-tog");
+  if(tog) { const fid = tog.dataset.fid; if(fid) tFl(fid); }
+});
+function tFl(id){
+  document.getElementById('ft-'+id).classList.toggle('open');
+  document.getElementById('fb-'+id).classList.toggle('open');
+}
+
+/* ── RESET ── */
+function resetAll(){
+  ASG='a';AM.clear();AFL='a';
+  document.querySelector('[data-sg="a"]').click();
+  document.querySelectorAll('.mo').forEach(el=>el.classList.remove('on'));
+  document.querySelector('[data-fl="a"]').click();
+  ['w','r','d'].forEach(id=>{
+    const set=id==='w'?AW:id==='r'?AR:AD;
+    const keys=id==='w'?[...document.querySelectorAll('#wItems .dd-i')].map(e=>e.dataset.v):id==='r'?R:C;
+    set.clear();
+    document.querySelectorAll('#'+id+'Items .dd-i').forEach(el=>{
+      const v=el.dataset.v,cb=el.querySelector('input');
+      const key=id==='w'?v:id==='r'?R[parseInt(v)]:C[parseInt(v)];
+      set.add(key);el.classList.add('on');if(cb)cb.checked=true;
+    });
+    updLbl(id);
+  });
+  APROM.clear();
+  document.querySelectorAll('[data-p]').forEach(el=>{
+    const p=el.dataset.p,cb=el.querySelector('input');
+    el.classList.add('on');if(cb)cb.checked=true;if(p!=='__a')APROM.add(p);
+  });
+  document.getElementById('MP').value='';
+  af();
+}
+
+/* ── AI ── */
+function sA(chip){document.getElementById('aiIn').value=chip.textContent;askAI();}
+async function askAI(){
+  const q=document.getElementById('aiIn').value.trim();
+  if(!q||!ALL.length)return;
+  const btn=document.getElementById('aiBtn');btn.disabled=true;btn.textContent='...';
+  document.getElementById('AR').classList.add('on');
+  document.getElementById('AB').innerHTML='<span style="color:#a0adb8;font-style:italic">🤖 Analyzing…</span>';
+  const src=FD.length?FD:ALL;
+  const prices=src.map(r=>r.pp).filter(p=>p>0);
+  const minP=prices.length?Math.min(...prices):0;
+  const avgP=prices.length?Math.round(prices.reduce((a,b)=>a+b,0)/prices.length):0;
+  const top10=src.slice(0,10).map(r=>'- '+R[r.ri]+' ('+C[r.ci]+') ['+SEGS[r.sg]+'] | '+r.dd+' | €'+r.pp+'/pp | '+(r.lo?'Land Only':r.os+' stop(s)')).join('\n');
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',max_tokens:600,
+        system:'Club Med Israel sales assistant. EUR, per person, 2 pax. Segments: SKI, SUMMER MOUNTAIN (Jul/Aug ski resorts), SHORT HAUL (Europe/Med), LONG HAUL (tropical). Answer English, concise, specific resort+price+date. Max 80 words.\nDATA: '+ALL.length.toLocaleString()+' total, '+FD.length.toLocaleString()+' filtered. Min €'+minP+', avg €'+avgP+'/pp.\nTOP OFFERS:\n'+top10,
+        messages:[{role:'user',content:q}]
+      })
+    });
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    const txt=data.content&&data.content[0]&&data.content[0].text;
+    if(!txt)throw new Error('Empty response');
+    document.getElementById('AB').textContent=txt;
+    autoApply(q);
+  }catch(e){
+    document.getElementById('AB').textContent='⚠️ AI error: '+e.message+'. Use manual filters.';
+  }
+  btn.disabled=false;btn.textContent='Analyze ↗';
+}
+
+function autoApply(q){
+  const lq=q.toLowerCase();
+  const mo={january:1,jan:1,february:2,feb:2,march:3,april:4,apr:4,may:5,june:6,jun:6,july:7,jul:7,august:8,aug:8,september:9,sep:9,october:10,oct:10,november:11,nov:11,december:12,dec:12};
+  let ch=false;
+  Object.entries(mo).forEach(([n,num])=>{
+    if(lq.includes(n)){
+      const yr=num>=5?2026:2027,k=yr+'-'+String(num).padStart(2,'0');
+      const el=document.querySelector('[data-mk="'+k+'"]');
+      if(el&&!el.classList.contains('on')){el.classList.add('on');AM.add(k);ch=true;}
+    }
+  });
+  if(lq.includes('ski')){const b=document.querySelector('[data-sg="0"]');if(b){setSg(b);ch=false;}}
+  if(lq.includes('summer mountain')){const b=document.querySelector('[data-sg="3"]');if(b){setSg(b);ch=false;}}
+  if(lq.includes('long haul')){const b=document.querySelector('[data-sg="2"]');if(b){setSg(b);ch=false;}}
+  if(lq.includes('direct')){const b=document.querySelector('[data-fl="d"]');if(b){setFl(b);ch=false;}}
+  if(lq.includes('land only')){const b=document.querySelector('[data-fl="l"]');if(b){setFl(b);ch=false;}}
+  if(ch)af();
+}
+
+document.getElementById('aiIn').addEventListener('keydown',e=>{if(e.key==='Enter')askAI();});
+loadData();
+
+
+document.getElementById("aiIn").addEventListener("keydown",e=>{if(e.key==="Enter")askAI();});
+loadData();
+</script>
+</body>
+</html>
