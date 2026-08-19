@@ -1,0 +1,14 @@
+name = "clubmed-offers"
+main = "offers-worker.js"
+compatibility_date = "2026-07-21"
+
+# Le classeur du jour + l'archive datée (14 jours glissants)
+[[r2_buckets]]
+binding = "OFFERS"
+bucket_name = "clubmed-offers"
+
+[vars]
+# Vide = tout expéditeur accepté. Renseigner l'adresse exacte de l'expéditeur
+# du mail quotidien, ou "@domaine.com" pour tout un domaine. Plusieurs valeurs
+# séparées par des virgules.
+ALLOWED_SENDERS = ""

@@ -358,7 +358,10 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1e293
 </div>
 
 <script>
-// GitHub API supports CORS from any origin
+// Alimenté automatiquement par le worker clubmed-offers : le mail quotidien
+// arrive sur offers@kwitlyapp.com, le worker dézippe et publie ici.
+const OFFERS_URL = "https://clubmed-offers.mtoledano10.workers.dev/OFFERS.xlsx";
+// Filet de sécurité si le worker est indisponible : dernier fichier committé.
 const GITHUB_API = "https://api.github.com/repos/mtoledano10/clubmed/contents/OFFERS.xlsx";
 
 const MO = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -382,20 +385,41 @@ async function loadData(){
   setP("Connecting...",10);
 
   try{
-    setP("Downloading from GitHub...", 25);
-    document.getElementById("loadHint").textContent = "via GitHub API";
-    const resp = await fetch(GITHUB_API + "?t=" + Date.now(), {
-      headers: { "Accept": "application/vnd.github.v3.raw" }
-    });
-    if(!resp.ok) throw new Error("HTTP " + resp.status + " — check OFFERS.xlsx is in your repo");
+    setP("Downloading today's file...", 25);
+    document.getElementById("loadHint").textContent = "via Kwitly worker";
+    let resp = await fetch(OFFERS_URL + "?t=" + Date.now());
+    if(resp.ok){
+      DATA_UPDATED_AT = resp.headers.get("x-updated-at") || "";
+    } else {
+      // Le worker n'a rien (aucun mail reçu) ou est en panne : on retombe sur GitHub
+      document.getElementById("loadHint").textContent = "worker indisponible — via GitHub";
+      DATA_UPDATED_AT = "";
+      resp = await fetch(GITHUB_API + "?t=" + Date.now(), {
+        headers: { "Accept": "application/vnd.github.v3.raw" }
+      });
+      if(!resp.ok) throw new Error("HTTP " + resp.status + " — aucune source disponible");
+    }
     setP("Reading data...", 55);
     const buffer = await resp.arrayBuffer();
     setP("Processing...", 75);
     await new Promise(r=>setTimeout(r,30));
     parseExcel(buffer);
   }catch(e){
-    showErr("Could not load OFFERS.xlsx.<br>Error: "+e.message+"<br><br>Make sure <strong>OFFERS.xlsx</strong> is in <strong>mtoledano10/clubmed</strong> on GitHub.");
+    showErr("Could not load OFFERS.xlsx.<br>Error: "+e.message+"<br><br>Vérifier que le mail quotidien est bien arrivé sur <strong>offers@kwitlyapp.com</strong>, ou que <strong>OFFERS.xlsx</strong> est dans <strong>mtoledano10/clubmed</strong>.");
   }
+}
+
+// Date de réception du fichier servi (en-tête x-updated-at du worker)
+let DATA_UPDATED_AT = "";
+function freshnessLabel(){
+  if(!DATA_UPDATED_AT) return "source GitHub";
+  const d = new Date(DATA_UPDATED_AT);
+  if(isNaN(d)) return "";
+  const ageH = (Date.now() - d.getTime()) / 3600000;
+  const stamp = String(d.getDate()).padStart(2,"0")+"/"+MO[d.getMonth()]+" "+
+                String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+  // Le fichier arrive tous les jours : au-delà de 30 h, le mail a sauté
+  return (ageH > 30 ? "⚠️ " : "")+"maj "+stamp;
 }
 
 function setP(msg,pct){
@@ -523,7 +547,7 @@ function parseExcel(buffer){
     setTimeout(()=>{
       document.getElementById("loadScreen").style.display="none";
       document.getElementById("appWrap").style.display="block";
-      document.getElementById("DS").innerHTML=ALL.length.toLocaleString()+" offers<br><span style='opacity:.5'>EUR · 2 pax</span>";
+      document.getElementById("DS").innerHTML=ALL.length.toLocaleString()+" offers<br><span style='opacity:.5'>EUR · 2 pax · "+freshnessLabel()+"</span>";
       resetFiltersState(); buildFilters(); af();
     },300);
   }catch(e){ showErr(e.message); }
