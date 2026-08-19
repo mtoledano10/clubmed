@@ -332,7 +332,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1e293
   <div class="search-bar">
     <div class="search-wrap">
       <span class="search-ico">🔍</span>
-      <input class="search-in" id="searchIn" placeholder="Search resort, destination, room type..." oninput="doSearch()" />
+      <input class="search-in" id="searchIn" placeholder="Resort, destination… ou une phrase : « chambre pour 5 en janvier au ski » puis ↵" oninput="doSearch()" />
       <button class="search-clear" id="searchClear" onclick="clearSearch()" style="display:none">✕</button>
     </div>
     <div class="search-stats" id="searchStats"></div>
@@ -1294,13 +1294,173 @@ function resetAll(){
   af();
 }
 
+/* ── RECHERCHE EN LANGAGE NATUREL ──
+   « chambre pour 5 en janvier au ski » coche les vrais filtres du panneau de
+   gauche plutôt que de chercher ce texte dans les colonnes. Analyse locale :
+   pas d'appel réseau, réponse immédiate, et surtout résultat prévisible.
+   nlParse ne touche pas au DOM — testable seule (scripts/test-nl.mjs). */
+const NL_MONTHS={janvier:1,janv:1,jan:1,january:1,fevrier:2,fev:2,february:2,feb:2,mars:3,march:3,mar:3,avril:4,avr:4,april:4,apr:4,mai:5,may:5,juin:6,june:6,jun:6,juillet:7,juil:7,july:7,jul:7,aout:8,august:8,aug:8,septembre:9,sept:9,september:9,sep:9,octobre:10,oct:10,october:10,novembre:11,nov:11,november:11,decembre:12,dec:12,december:12};
+const NL_DOWS={dimanche:0,sunday:0,lundi:1,monday:1,mardi:2,tuesday:2,mercredi:3,wednesday:3,jeudi:4,thursday:4,vendredi:5,friday:5,samedi:6,saturday:6};
+const NL_STOP=new Set("je j ai cherche recherche voudrais veux souhaite donne donnez moi me une un des de du d la le les l a au aux en sur avec et ou est c ce qui que quoi pour dans par svp stp merci offre offres sejour sejours vacances possible trouve trouver montre montrer affiche liste dispo disponible client famille famille prix tarif tarifs partir depart depuis vers give show find best want need the for with and on in at from please room rooms offer offers price chambre chambres nuit nuits semaine semaines jour jours meilleur meilleure meilleurs vol vols avion escale escales personne personnes adulte adultes enfant enfants pax voyageur voyageurs".split(/\s+/));
+
+function nlNorm(s){return String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");}
+
+/** @param {string} q  @param {{key:string,m:number,y:number}[]} moisDispo */
+function nlParse(q,moisDispo){
+  let s=" "+nlNorm(q).replace(/[^a-z0-9<>€$']+/g," ")+" ";
+  const out={segs:[],months:[],occ:[],flight:null,dur:null,maxPrice:null,dows:[],best:false,text:"",notes:[]};
+  const eat=(re,fn)=>{s=s.replace(re,(...a)=>{fn(...a);return " ";});};
+
+  // Prix d'abord : sinon « moins de 2000 » se ferait lire comme une occupancy
+  eat(/\b(?:moins de|max(?:imum)?|budget|sous|jusqu'?a|<)\s*(\d[\d\s.]*)\s*(?:e|eur|euros?|€)?\b/,(m,n)=>{
+    out.maxPrice=parseInt(String(n).replace(/[\s.]/g,""),10)||null;});
+  eat(/\b(\d[\d\s.]*)\s*(?:e|eur|euros?|€)\s*max(?:i|imum)?\b/,(m,n)=>{
+    out.maxPrice=parseInt(String(n).replace(/[\s.]/g,""),10)||null;});
+
+  // Vol
+  eat(/\bvols? directs?\b|\bsans escale\b|\bdirect flights?\b|\bnon ?stop\b|\bdirects?\b/,()=>{out.flight="d";});
+  eat(/\b(?:1|une) escale\b|\b1 stop\b/,()=>{out.flight="1";});
+  eat(/\bsans vol\b|\bland only\b|\bsans avion\b|\bhebergement seul\b/,()=>{out.flight="l";});
+
+  // Occupancy : « 2 adultes + 3 enfants » l'emporte sur un simple « pour 5 »
+  eat(/\b(\d)\s*adultes?\b[^\d]{0,14}?(\d)\s*enfants?\b/,(m,a,b)=>{out.occ=[parseInt(a)+parseInt(b)];});
+  if(!out.occ.length){
+    eat(/\b(\d)\s*(?:personnes?|pers\b|pax\b|voyageurs?|adultes?)/,(m,n)=>{out.occ=[parseInt(n)];});
+  }
+  if(!out.occ.length){
+    eat(/\b(?:pour|famille de|groupe de|chambre de)\s+(\d)\b/,(m,n)=>{out.occ=[parseInt(n)];});
+  }
+
+  // Durée
+  eat(/\b(\d{1,2})\s*(?:nuits?|nights?)\b/,(m,n)=>{out.dur=parseInt(n);});
+  eat(/\b(?:une|1)\s*semaine\b|\bone week\b/,()=>{if(!out.dur)out.dur=7;});
+
+  // Segments — « montagne » seul est ambigu avec le ski, on exige « ete »
+  eat(/\bski\b|\bneige\b|\bsports? d hiver\b/,()=>{out.segs.push(0);});
+  eat(/\bsummer mountain\b|\bmontagne (?:l ?)?ete\b|\bete (?:a la )?montagne\b/,()=>{out.segs.push(3);});
+  eat(/\bshort haul\b|\bcourt courrier\b|\bmoyen courrier\b/,()=>{out.segs.push(1);});
+  eat(/\blong haul\b|\blong courrier\b|\blointain\b/,()=>{out.segs.push(2);});
+
+  // Année explicite, puis mois : « janvier » = les janvier présents dans les données
+  let annee=null;
+  eat(/\b(20\d\d)\b/,(m,y)=>{annee=parseInt(y);});
+  const moisVoulus=new Set();
+  for(const [mot,num] of Object.entries(NL_MONTHS)){
+    const re=new RegExp("\\b"+mot+"\\b");
+    if(re.test(s)){moisVoulus.add(num);s=s.replace(re," ");}
+  }
+  if(moisVoulus.size){
+    out.months=(moisDispo||[]).filter(x=>moisVoulus.has(x.m)&&(!annee||x.y===annee)).map(x=>x.key);
+    if(!out.months.length) out.notes.push("aucun mois de ce nom dans les données");
+  }
+
+  // Jour de départ
+  for(const [mot,num] of Object.entries(NL_DOWS)){
+    const re=new RegExp("\\b"+mot+"\\b");
+    if(re.test(s)){out.dows.push(num);s=s.replace(re," ");}
+  }
+
+  eat(/\bmeilleurs? prix\b|\ble moins cher\b|\bmoins cher\b|\bpas cher\b|\bbest price\b|\bcheapest\b|\bpromo\b/,()=>{out.best=true;});
+
+  // Ce qui reste et qui n'est pas un mot vide sert de recherche texte : c'est
+  // ce qui fait que « punta cana » ou « suite » continuent de fonctionner.
+  out.text=s.split(/\s+/).filter(w=>w&&w.length>2&&!NL_STOP.has(w)&&!/^\d+$/.test(w)).join(" ").trim();
+
+  // Le catalogue ne vend le vol qu'en occupancy 2 : on le dit au lieu de
+  // renvoyer zéro résultat sans explication.
+  if(out.occ.length&&out.occ[0]>2&&(out.flight==="d"||out.flight==="1")){
+    out.flight="l";
+    out.notes.push("les forfaits avec vol sont limités à 2 personnes — basculé sur Land Only");
+  }
+  return out;
+}
+
+/* Applique l'intention aux filtres réels, panneau de gauche compris */
+function nlApply(x){
+  ASGS.clear();
+  document.querySelectorAll('[data-sg]').forEach(b=>b.classList.remove('on'));
+  if(x.segs.length){x.segs.forEach(s=>{ASGS.add(s);const b=document.querySelector('[data-sg="'+s+'"]');if(b)b.classList.add('on');});}
+  else document.querySelector('[data-sg="a"]').classList.add('on');
+
+  AM.clear();
+  document.querySelectorAll('.mo').forEach(e=>e.classList.remove('on'));
+  x.months.forEach(k=>{AM.add(k);const el=document.querySelector('.mo[data-mk="'+k+'"]');if(el)el.classList.add('on');});
+
+  AFL=x.flight||'a';
+  document.querySelectorAll('[data-fl]').forEach(b=>b.classList.toggle('on',b.dataset.fl===AFL));
+
+  AOCC.clear();
+  document.querySelectorAll('[data-occ]').forEach(b=>b.classList.remove('on'));
+  if(x.occ.length){x.occ.forEach(o=>{AOCC.add(o);const b=document.querySelector('[data-occ="'+o+'"]');if(b)b.classList.add('on');});}
+  else document.querySelector('[data-occ="a"]').classList.add('on');
+
+  ADUR.clear();
+  document.querySelectorAll('[data-dur]').forEach(b=>b.classList.remove('on'));
+  const durBtn=x.dur?document.querySelector('[data-dur="'+x.dur+'"]'):null;
+  if(durBtn){ADUR.add(x.dur);durBtn.classList.add('on');}
+  else document.querySelector('[data-dur="a"]').classList.add('on');
+
+  ADOW.clear();
+  document.querySelectorAll('[data-dow]').forEach(b=>b.classList.remove('on'));
+  if(x.dows.length){x.dows.forEach(d=>{ADOW.add(d);const b=document.querySelector('[data-dow="'+d+'"]');if(b)b.classList.add('on');});}
+  else document.querySelector('[data-dow="a"]').classList.add('on');
+
+  document.getElementById('MP').value=x.maxPrice||'';
+  SEARCH_TERM=x.text;
+  // updateOccLock() forcerait occupancy 2 dès qu'un vol est demandé : on ne
+  // l'appelle qu'après coup, et jamais quand l'utilisateur a demandé un groupe
+  if(!(x.occ.length&&x.occ[0]>2)) updateOccLock();
+  if(x.best){SORT='p';document.querySelectorAll('.sbt').forEach(b=>b.classList.remove('on'));document.querySelector('.sbt').classList.add('on');}
+  af();
+}
+
+/** Ce que la phrase a produit, en clair — sinon l'utilisateur ne peut pas
+ *  savoir si l'outil l'a comprise ou a silencieusement ignoré la moitié. */
+function nlRecap(x){
+  const noms=['Ski','Short Haul','Long Haul','Summer Mountain'];
+  const p=[];
+  if(x.segs.length)p.push(x.segs.map(s=>noms[s]).join('+'));
+  if(x.months.length)p.push(x.months.map(k=>{const [y,m]=k.split('-');return MO[parseInt(m)-1]+' '+y.slice(2);}).join(', '));
+  if(x.dows.length)p.push(x.dows.map(d=>['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'][d]).join('/'));
+  if(x.occ.length)p.push(x.occ.join('+')+' personnes');
+  if(x.dur)p.push(x.dur+' nuits');
+  if(x.flight)p.push(x.flight==='d'?'vol direct':x.flight==='1'?'1 escale':'Land Only');
+  if(x.maxPrice)p.push('max '+x.maxPrice.toLocaleString()+' €');
+  if(x.best)p.push('trié par prix');
+  if(x.text)p.push('texte « '+x.text+' »');
+  return p;
+}
+
+function nlSearch(){
+  const q=document.getElementById('searchIn').value.trim();
+  if(!q){clearSearch();return;}
+  const mois=[...document.querySelectorAll('.mo')].map(el=>{
+    const [y,m]=el.dataset.mk.split('-');return {key:el.dataset.mk,m:parseInt(m),y:parseInt(y)};});
+  const x=nlParse(q,mois);
+  const compris=nlRecap(x);
+  if(!compris.length){doSearch();return;} // rien de structuré : recherche texte
+  nlApply(x);
+  const st=document.getElementById('searchStats');
+  st.innerHTML='<strong style="color:#1a3a5c">Compris :</strong> '+compris.join(' · ')+
+    ' &nbsp;→&nbsp; '+FD.length.toLocaleString()+' offre'+(FD.length>1?'s':'')+
+    (x.notes.length?'<br><span style="color:#b45309">⚠️ '+x.notes.join(' · ')+'</span>':'')+
+    (FD.length===0?'<br><span style="color:#b45309">Aucune offre ne correspond — élargis un critère dans le panneau de gauche.</span>':'');
+}
+
 /* ── AI ── */
 let SEARCH_TERM = "";
 
 function doSearch(){
-  const val = document.getElementById("searchIn").value.trim().toLowerCase();
-  SEARCH_TERM = val;
-  document.getElementById("searchClear").style.display = val ? "block" : "none";
+  const raw = document.getElementById("searchIn").value.trim();
+  document.getElementById("searchClear").style.display = raw ? "block" : "none";
+  // Une phrase entière ne veut rien dire en recherche texte : on attend Entrée
+  // au lieu d'afficher « 0 résultat » à chaque frappe.
+  if(raw.split(/\s+/).length > 3){
+    document.getElementById("searchStats").innerHTML =
+      'Appuyez sur <strong>Entrée</strong> pour interpréter la phrase';
+    return;
+  }
+  SEARCH_TERM = raw.toLowerCase();
   af();
 }
 
@@ -1314,6 +1474,7 @@ function clearSearch(){
 
 document.getElementById("searchIn").addEventListener("keydown", e => {
   if(e.key === "Escape") clearSearch();
+  if(e.key === "Enter"){ e.preventDefault(); nlSearch(); }
 });
 
 loadData();

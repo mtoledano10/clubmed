@@ -1,0 +1,9 @@
+# Netlify ne sert plus l'app : le worker Cloudflare la sert (app + donnees,
+# meme origine). On garde une redirection pour les favoris deja distribues.
+# Volontairement dans netlify.toml et PAS dans _redirects : Cloudflare lit
+# aussi _redirects, et l'appliquerait au worker -> boucle infinie sur lui-meme.
+[[redirects]]
+  from = "/*"
+  to = "https://clubmed-offers.mtoledano10.workers.dev/:splat"
+  status = 301
+  force = true
