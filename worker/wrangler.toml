@@ -13,6 +13,12 @@ directory = "../"
 binding = "OFFERS"
 bucket_name = "clubmed-offers"
 
+# Qui ouvre l'outil et ce qu'il cherche
+[[d1_databases]]
+binding = "USAGE"
+database_name = "clubmed-usage"
+database_id = "6b7d292b-3d37-4177-92cf-db3df736c00d"
+
 [vars]
 # Vide = tout expéditeur accepté. Renseigner l'adresse exacte de l'expéditeur
 # du mail quotidien, ou "@domaine.com" pour tout un domaine. Plusieurs valeurs

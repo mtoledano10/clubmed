@@ -251,6 +251,88 @@ async function pruneArchive(env) {
   }
 }
 
+/* ─────────────────────  PAGE D'ADMINISTRATION  ───────────────────── */
+
+const esc = (v) =>
+  String(v == null ? "" : v).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+async function adminPage(env, url) {
+  const jours = Math.min(parseInt(url.searchParams.get("j") || "30", 10) || 30, 365);
+  const depuis = new Date(Date.now() - jours * 86400000).toISOString();
+
+  const [resume, parPersonne, recherches] = await Promise.all([
+    env.USAGE.prepare(
+      "SELECT COUNT(*) AS total, SUM(kind='open') AS ouvertures, SUM(kind='search') AS recherches," +
+        " COUNT(DISTINCT COALESCE(who,device)) AS personnes FROM visits WHERE ts >= ?"
+    ).bind(depuis).first(),
+    env.USAGE.prepare(
+      "SELECT COALESCE(who,'(anonyme)') AS qui, COUNT(DISTINCT device) AS appareils," +
+        " SUM(kind='open') AS ouvertures, SUM(kind='search') AS recherches," +
+        " MIN(ts) AS premiere, MAX(ts) AS derniere FROM visits WHERE ts >= ?" +
+        " GROUP BY qui ORDER BY derniere DESC"
+    ).bind(depuis).all(),
+    env.USAGE.prepare(
+      "SELECT ts, COALESCE(who,'(anonyme)') AS qui, query, results, country FROM visits" +
+        " WHERE kind='search' AND ts >= ? ORDER BY ts DESC LIMIT 100"
+    ).bind(depuis).all(),
+  ]);
+
+  const quand = (t) => (t ? t.slice(0, 16).replace("T", " ") : "—");
+  const lignesPersonnes = (parPersonne.results || [])
+    .map((r) => `<tr><td><strong>${esc(r.qui)}</strong></td><td>${r.ouvertures || 0}</td><td>${r.recherches || 0}</td>` +
+      `<td>${r.appareils || 0}</td><td>${quand(r.premiere)}</td><td>${quand(r.derniere)}</td></tr>`)
+    .join("") || '<tr><td colspan="6" style="color:#94a3b8">Aucune visite sur la période</td></tr>';
+
+  const lignesRecherches = (recherches.results || [])
+    .map((r) => `<tr><td>${quand(r.ts)}</td><td>${esc(r.qui)}</td><td>${esc(r.query)}</td>` +
+      `<td style="text-align:right">${r.results == null ? "—" : r.results.toLocaleString("fr-FR")}</td><td>${esc(r.country)}</td></tr>`)
+    .join("") || '<tr><td colspan="5" style="color:#94a3b8">Aucune recherche sur la période</td></tr>';
+
+  const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Usage — Club Med Offers</title><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1e293b;padding:20px}
+h1{font-size:19px;margin-bottom:2px}h2{font-size:14px;margin:22px 0 8px;color:#475569}
+.sub{font-size:12px;color:#7c8fa6;margin-bottom:16px}
+.cards{display:flex;gap:10px;flex-wrap:wrap}
+.card{background:white;border:1px solid #e5eaf2;border-radius:10px;padding:12px 16px;min-width:130px}
+.card b{display:block;font-size:24px;color:#1a3a5c}
+.card span{font-size:11px;color:#7c8fa6;text-transform:uppercase;letter-spacing:.5px}
+table{width:100%;border-collapse:collapse;background:white;border:1px solid #e5eaf2;border-radius:10px;overflow:hidden;font-size:13px}
+th{background:#1a3a5c;color:white;text-align:left;padding:7px 10px;font-size:11px;font-weight:600}
+td{padding:6px 10px;border-bottom:1px solid #f0f4f8}
+tr:hover td{background:#f8fafc}
+.per{margin-top:18px;font-size:12px}.per a{color:#1a3a5c;margin-right:10px}
+.note{margin-top:22px;font-size:11.5px;color:#7c8fa6;line-height:1.6;max-width:760px}
+</style></head><body>
+<h1>Qui utilise l'outil</h1>
+<div class="sub">Club Med Offers — ${jours} derniers jours</div>
+<div class="cards">
+  <div class="card"><b>${resume.personnes || 0}</b><span>personnes</span></div>
+  <div class="card"><b>${resume.ouvertures || 0}</b><span>ouvertures</span></div>
+  <div class="card"><b>${resume.recherches || 0}</b><span>recherches</span></div>
+</div>
+<div class="per">Période :
+  <a href="?k=${esc(url.searchParams.get("k"))}&j=7">7 jours</a>
+  <a href="?k=${esc(url.searchParams.get("k"))}&j=30">30 jours</a>
+  <a href="?k=${esc(url.searchParams.get("k"))}&j=365">1 an</a></div>
+<h2>Par personne</h2>
+<table><thead><tr><th>Qui</th><th>Ouvertures</th><th>Recherches</th><th>Appareils</th><th>Première visite</th><th>Dernière visite</th></tr></thead>
+<tbody>${lignesPersonnes}</tbody></table>
+<h2>Dernières recherches</h2>
+<table><thead><tr><th>Quand (UTC)</th><th>Qui</th><th>Recherche</th><th>Résultats</th><th>Pays</th></tr></thead>
+<tbody>${lignesRecherches}</tbody></table>
+<p class="note"><strong>Ce que vaut le nom affiché :</strong> il est déclaré par l'utilisateur lui-même au premier
+usage, pas vérifié. Il répond à « qui se sert de l'outil », pas à « qui a le droit d'y accéder » : n'importe qui
+connaissant l'URL peut ouvrir l'app et saisir le nom qu'il veut. Pour une identité vérifiée et un accès restreint,
+il faut activer Cloudflare Access (Zero Trust) sur ce worker — la colonne « Qui » basculera alors automatiquement
+sur l'adresse e-mail authentifiée.</p>
+</body></html>`;
+  return new Response(html, { headers: { "content-type": "text/html;charset=UTF-8", "cache-control": "no-store" } });
+}
+
 export default {
   async email(message, env) {
     const from = message.from || "";
@@ -329,6 +411,48 @@ export default {
       "Access-Control-Expose-Headers": "x-updated-at, etag, content-length",
     };
     if (request.method === "OPTIONS") return new Response(null, { headers: cors });
+
+    /* ── Qui ouvre l'outil et ce qu'il cherche ──
+       Best-effort de bout en bout : une erreur de journalisation ne doit
+       jamais empêcher un commercial de consulter ses prix. */
+    if (url.pathname === "/api/track" && request.method === "POST") {
+      try {
+        const b = await request.json();
+        // Chaîne vide -> NULL, sinon le regroupement « (anonyme) » de la page
+        // d'admin (COALESCE) ne se déclencherait jamais.
+        const coupe = (v, n) => {
+          const t = v == null ? "" : String(v).trim().slice(0, n);
+          return t === "" ? null : t;
+        };
+        const kind = b.kind === "search" ? "search" : "open";
+        await env.USAGE.prepare(
+          "INSERT INTO visits (ts,kind,who,device,query,results,ip,country,ua) VALUES (?,?,?,?,?,?,?,?,?)"
+        ).bind(
+          new Date().toISOString(),
+          kind,
+          // Si Cloudflare Access est activé un jour, l'identité vérifiée prime
+          // sur le nom déclaré par l'utilisateur lui-même.
+          coupe(request.headers.get("cf-access-authenticated-user-email") || b.who, 120),
+          coupe(b.device, 40),
+          coupe(b.query, 300),
+          Number.isFinite(b.results) ? b.results : null,
+          coupe(request.headers.get("cf-connecting-ip"), 45),
+          coupe(request.cf && request.cf.country, 8),
+          coupe(request.headers.get("user-agent"), 200)
+        ).run();
+      } catch (e) {
+        console.log("track KO: " + e.message);
+      }
+      return new Response(null, { status: 204, headers: cors });
+    }
+
+    if (url.pathname === "/admin") {
+      // 404 plutôt que 403 : inutile de confirmer que la page existe.
+      if (!env.ADMIN_KEY || url.searchParams.get("k") !== env.ADMIN_KEY) {
+        return new Response("Page inconnue", { status: 404, headers: cors });
+      }
+      return adminPage(env, url);
+    }
 
     if (url.pathname === "/status") {
       const head = await env.OFFERS.head(CURRENT_KEY);

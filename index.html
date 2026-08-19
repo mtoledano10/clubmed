@@ -225,6 +225,12 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1e293
   </div>
   <div class="hdr-info" id="DS">—<br><span>EUR · /pp</span></div>
 </div>
+<div id="whoBar" style="display:none;background:#fffbe6;border-bottom:1px solid #f5e3a3;padding:7px 14px;font-size:12px;color:#7a5b00;display:none;align-items:center;gap:8px;flex-wrap:wrap">
+  <span>👋 Bienvenue — ton prénom, pour le suivi d'utilisation de l'outil :</span>
+  <input id="whoIn" placeholder="Prénom Nom" style="border:1px solid #e2cd8a;border-radius:6px;padding:4px 8px;font-size:12px;outline:none;min-width:150px" />
+  <button id="whoOk" style="background:#1a3a5c;color:white;border:none;border-radius:6px;padding:4px 12px;font-size:12px;font-weight:600;cursor:pointer">OK</button>
+  <button id="whoSkip" style="background:none;border:none;color:#a08430;font-size:11.5px;cursor:pointer;text-decoration:underline">plus tard</button>
+</div>
 <div class="main">
 <div class="lp">
   <div>
@@ -549,6 +555,7 @@ function parseExcel(buffer){
       document.getElementById("appWrap").style.display="block";
       document.getElementById("DS").innerHTML=ALL.length.toLocaleString()+" offers<br><span style='opacity:.5'>EUR · 2 pax · "+freshnessLabel()+"</span>";
       resetFiltersState(); buildFilters(); af();
+      initWho(); track('open');
     },300);
   }catch(e){ showErr(e.message); }
 }
@@ -1294,6 +1301,44 @@ function resetAll(){
   af();
 }
 
+/* ── QUI UTILISE L'OUTIL ──
+   Journalise l'ouverture de l'app et les recherches. Le nom est déclaré par
+   l'utilisateur, pas vérifié : ça répond à « qui s'en sert », pas à « qui a le
+   droit d'entrer ». Best-effort — un échec d'envoi ne bloque jamais l'app.
+   L'URL est absolue : l'app peut encore être servie par Netlify, où /api/track
+   n'existe pas. */
+const API_BASE = new URL(OFFERS_URL).origin;
+function cmDevice(){
+  let d=null;
+  try{ d=localStorage.getItem('cm_device');
+    if(!d){d=Math.random().toString(36).slice(2)+Date.now().toString(36);localStorage.setItem('cm_device',d);} }catch(e){}
+  return d;
+}
+function cmWho(){ try{ return localStorage.getItem('cm_who')||''; }catch(e){ return ''; } }
+function track(kind,query,results){
+  try{
+    const corps=JSON.stringify({kind,who:cmWho(),device:cmDevice(),query:query||null,
+      results:(typeof results==='number'?results:null)});
+    // text/plain garde la requête « simple » : sendBeacon ne sait pas gérer un
+    // préflight CORS, qu'un content-type JSON déclencherait.
+    if(navigator.sendBeacon) navigator.sendBeacon(API_BASE+'/api/track',new Blob([corps],{type:'text/plain;charset=UTF-8'}));
+    else fetch(API_BASE+'/api/track',{method:'POST',body:corps,keepalive:true});
+  }catch(e){}
+}
+function initWho(){
+  const bar=document.getElementById('whoBar');
+  if(cmWho()||!bar) return;
+  bar.style.display='flex';
+  const valider=()=>{
+    const v=document.getElementById('whoIn').value.trim();
+    if(v){ try{localStorage.setItem('cm_who',v);}catch(e){} track('open'); }
+    bar.style.display='none';
+  };
+  document.getElementById('whoOk').addEventListener('click',valider);
+  document.getElementById('whoIn').addEventListener('keydown',e=>{if(e.key==='Enter')valider();});
+  document.getElementById('whoSkip').addEventListener('click',()=>{bar.style.display='none';});
+}
+
 /* ── RECHERCHE EN LANGAGE NATUREL ──
    « chambre pour 5 en janvier au ski » coche les vrais filtres du panneau de
    gauche plutôt que de chercher ce texte dans les colonnes. Analyse locale :
@@ -1303,13 +1348,49 @@ const NL_MONTHS={janvier:1,janv:1,jan:1,january:1,fevrier:2,fev:2,february:2,feb
 const NL_DOWS={dimanche:0,sunday:0,lundi:1,monday:1,mardi:2,tuesday:2,mercredi:3,wednesday:3,jeudi:4,thursday:4,vendredi:5,friday:5,samedi:6,saturday:6};
 const NL_STOP=new Set("je j ai cherche recherche voudrais veux souhaite donne donnez moi me une un des de du d la le les l a au aux en sur avec et ou est c ce qui que quoi pour dans par svp stp merci offre offres sejour sejours vacances possible trouve trouver montre montrer affiche liste dispo disponible client famille famille prix tarif tarifs partir depart depuis vers give show find best want need the for with and on in at from please room rooms offer offers price chambre chambres nuit nuits semaine semaines jour jours meilleur meilleure meilleurs vol vols avion escale escales personne personnes adulte adultes enfant enfants pax voyageur voyageurs".split(/\s+/));
 
-function nlNorm(s){return String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");}
+/* Hébreu. Deux difficultés propres à la langue :
+   1. les particules se collent au mot — « en janvier » = בינואר, « au ski » =
+      בסקי — donc chaque motif tolère 0 à 2 lettres de préfixe (בהלוכמש) ;
+   2. \b de JS ne fonctionne pas sur l'alphabet hébreu (hors [A-Za-z0-9_]),
+      d'où des frontières explicites à l'espace. */
+const HE_PREF="(?:^|\\s)[בהלוכמשׁ]{0,2}-?";
+const heRe=(motif)=>new RegExp(HE_PREF+motif+"(?=\\s|$)");
+const HE_MONTHS={"ינואר":1,"פברואר":2,"מרץ":3,"מרס":3,"אפריל":4,"מאי":5,"יוני":6,"יולי":7,"אוגוסט":8,"ספטמבר":9,"אוקטובר":10,"נובמבר":11,"דצמבר":12};
+const HE_DOWS={"ראשון":0,"שני":1,"שלישי":2,"רביעי":3,"חמישי":4,"שישי":5,"שבת":6};
+const HE_STOP=new Set(["אני","אנחנו","מחפש","מחפשת","מחפשים","רוצה","רוצים","צריך","צריכה","תן","תני","תביא","לי","לנו","את","של","עם","יש","בבקשה","חדר","חדרים","הצעה","הצעות","חופשה","נופש","מלון","בית","מחיר","מחירים","טוב","טובה","הכי","עבור","בין","או","גם","כל","זה","מה","איזה","אפשר","אפשרות","לילה","לילות","שבוע","שבועות","יום","ימים","אנשים","איש","נפשות","מבוגרים","מבוגר","ילדים","ילד","טיסה","טיסות","תאריך","יציאה","יוצא"]);
+
+function nlNorm(s){return String(s||"").toLowerCase().normalize("NFD").replace(/[̀-֑ͯ-ׇ]/g,"");}
 
 /** @param {string} q  @param {{key:string,m:number,y:number}[]} moisDispo */
 function nlParse(q,moisDispo){
-  let s=" "+nlNorm(q).replace(/[^a-z0-9<>€$']+/g," ")+" ";
+  // On garde l'alphabet hébreu (U+05D0..U+05EA) en plus du latin, sinon la
+  // phrase serait réduite à une suite d'espaces.
+  let s=" "+nlNorm(q).replace(/[^a-z0-9א-ת<>€$']+/g," ")+" ";
   const out={segs:[],months:[],occ:[],flight:null,dur:null,maxPrice:null,dows:[],best:false,text:"",notes:[]};
   const eat=(re,fn)=>{s=s.replace(re,(...a)=>{fn(...a);return " ";});};
+  const heEat=(motif,fn)=>{const re=heRe(motif);const m=s.match(re);if(m){fn(m);s=s.replace(re," ");}};
+
+  /* ── Hébreu ── (avant le latin : les motifs sont plus spécifiques) */
+  heEat("(?:עד|מקסימום)\\s*(\\d[\\d\\s.]*)",m=>{out.maxPrice=parseInt(String(m[1]).replace(/[\s.]/g,""),10)||null;});
+  // « sans vol » d'abord, sinon « טיסה » serait happé par le motif « vol direct »
+  heEat("(?:ללא|בלי)\\s+טיסה|לנד\\s*אונלי|רק\\s+מלון",()=>{out.flight="l";});
+  heEat("טיסה\\s+ישירה|ישירות?|ישיר",()=>{out.flight="d";});
+  heEat("עצירה\\s+אחת|קונקשן",()=>{out.flight="1";});
+  heEat("(\\d)\\s*מבוגרים?[^\\d]{0,10}?(\\d)\\s*ילדים?",m=>{out.occ=[parseInt(m[1])+parseInt(m[2])];});
+  if(!out.occ.length) heEat("(\\d)\\s*(?:אנשים|איש|נפשות|מבוגרים|מבוגר)",m=>{out.occ=[parseInt(m[1])];});
+  if(!out.occ.length) heEat("(?:משפחה|קבוצה|חדר)\\s+של\\s*(\\d)",m=>{out.occ=[parseInt(m[1])];});
+  if(!out.occ.length){ // « ל-5 » / « ל5 » = pour 5 ; ici ל est la particule, pas un préfixe à ignorer
+    const m=s.match(/(?:^|\s)ל-?\s*(\d)(?=\s|$)/);
+    if(m){out.occ=[parseInt(m[1])];s=s.replace(m[0]," ");}
+  }
+  if(!out.occ.length) heEat("זוג",()=>{out.occ=[2];});
+  heEat("(\\d{1,2})\\s*לילות?",m=>{out.dur=parseInt(m[1]);});
+  heEat("שבוע",()=>{if(!out.dur)out.dur=7;});
+  heEat("סקי",()=>{out.segs.push(0);});
+  heEat("קיץ\\s+בהרים|הרים\\s+בקיץ",()=>{out.segs.push(3);});
+  heEat("טווח\\s+קצר|קרוב",()=>{out.segs.push(1);});
+  heEat("טווח\\s+ארוך|רחוק",()=>{out.segs.push(2);});
+  heEat("הכי\\s+זול|זול|מחיר\\s+הכי\\s+טוב",()=>{out.best=true;});
 
   // Prix d'abord : sinon « moins de 2000 » se ferait lire comme une occupancy
   eat(/\b(?:moins de|max(?:imum)?|budget|sous|jusqu'?a|<)\s*(\d[\d\s.]*)\s*(?:e|eur|euros?|€)?\b/,(m,n)=>{
@@ -1349,6 +1430,10 @@ function nlParse(q,moisDispo){
     const re=new RegExp("\\b"+mot+"\\b");
     if(re.test(s)){moisVoulus.add(num);s=s.replace(re," ");}
   }
+  for(const [mot,num] of Object.entries(HE_MONTHS)){
+    const re=heRe(mot);
+    if(re.test(s)){moisVoulus.add(num);s=s.replace(re," ");}
+  }
   if(moisVoulus.size){
     out.months=(moisDispo||[]).filter(x=>moisVoulus.has(x.m)&&(!annee||x.y===annee)).map(x=>x.key);
     if(!out.months.length) out.notes.push("aucun mois de ce nom dans les données");
@@ -1359,12 +1444,27 @@ function nlParse(q,moisDispo){
     const re=new RegExp("\\b"+mot+"\\b");
     if(re.test(s)){out.dows.push(num);s=s.replace(re," ");}
   }
+  for(const [mot,num] of Object.entries(HE_DOWS)){
+    // « שני » veut aussi dire « deux » : on exige « יום » devant, sauf pour שבת
+    const re=mot==="שבת"?heRe(mot):new RegExp("(?:^|\\s)ביום\\s+"+mot+"(?=\\s|$)|(?:^|\\s)יום\\s+"+mot+"(?=\\s|$)");
+    if(re.test(s)){out.dows.push(num);s=s.replace(re," ");}
+  }
 
   eat(/\bmeilleurs? prix\b|\ble moins cher\b|\bmoins cher\b|\bpas cher\b|\bbest price\b|\bcheapest\b|\bpromo\b/,()=>{out.best=true;});
 
   // Ce qui reste et qui n'est pas un mot vide sert de recherche texte : c'est
   // ce qui fait que « punta cana » ou « suite » continuent de fonctionner.
-  out.text=s.split(/\s+/).filter(w=>w&&w.length>2&&!NL_STOP.has(w)&&!/^\d+$/.test(w)).join(" ").trim();
+  // « ביום » = « יום » précédé de sa particule : on retire le préfixe avant de
+  // tester la liste des mots vides, sinon chaque variante devrait y figurer.
+  const heBase=(w)=>w.replace(/^[בהלוכמש]{1,2}(?=.{2,})/,"");
+  const restants=s.split(/\s+/).filter(w=>w&&w.length>2&&!/^\d+$/.test(w)
+    &&!NL_STOP.has(w)&&!HE_STOP.has(w)&&!HE_STOP.has(heBase(w)));
+  const enHebreu=restants.filter(w=>/[א-ת]/.test(w));
+  // Les données du fichier sont en alphabet latin : chercher un mot hébreu
+  // dedans renverrait toujours zéro. On l'ignore et on le signale, plutôt que
+  // de vider la liste des résultats sans que l'utilisateur comprenne pourquoi.
+  out.text=restants.filter(w=>!/[א-ת]/.test(w)).join(" ").trim();
+  if(enHebreu.length) out.notes.push("non compris : "+enHebreu.join(" "));
 
   // Le catalogue ne vend le vol qu'en occupancy 2 : on le dit au lieu de
   // renvoyer zéro résultat sans explication.
@@ -1440,6 +1540,7 @@ function nlSearch(){
   const compris=nlRecap(x);
   if(!compris.length){doSearch();return;} // rien de structuré : recherche texte
   nlApply(x);
+  track('search',q,FD.length);
   const st=document.getElementById('searchStats');
   st.innerHTML='<strong style="color:#1a3a5c">Compris :</strong> '+compris.join(' · ')+
     ' &nbsp;→&nbsp; '+FD.length.toLocaleString()+' offre'+(FD.length>1?'s':'')+

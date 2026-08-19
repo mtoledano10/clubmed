@@ -45,6 +45,24 @@ Le worker refuse le message (avec un motif visible dans les logs Cloudflare)
 plutôt que d'écraser les données de la veille si : expéditeur non autorisé,
 aucune pièce jointe `.zip`, archive illisible, classeur non-Excel ou < 1 Ko.
 
+## Qui utilise l'outil
+
+`GET /admin?k=<ADMIN_KEY>` — personnes, ouvertures, recherches sur 7/30/365 jours,
+détail par personne et les 100 dernières recherches. Sans la clé : 404 (inutile
+de confirmer que la page existe). La clé est un **secret Cloudflare**, jamais
+dans ce dépôt qui est public :
+
+```bash
+wrangler secret put ADMIN_KEY
+```
+
+L'app envoie deux événements (`open`, `search`) vers `POST /api/track`, stockés
+dans la base D1 `clubmed-usage`. Le nom est **déclaré par l'utilisateur** au
+premier usage (bannière, refusable) : ça répond à « qui s'en sert », pas à « qui
+a le droit d'entrer ». Pour une identité vérifiée, activer Cloudflare Access sur
+le worker — le code lit déjà `cf-access-authenticated-user-email` en priorité sur
+le nom déclaré, sans modification.
+
 ## Tests
 
 ```bash
