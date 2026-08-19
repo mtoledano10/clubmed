@@ -254,8 +254,15 @@ async function pruneArchive(env) {
 export default {
   async email(message, env) {
     const from = message.from || "";
+    // Tracé dans `wrangler tail` : un mail refusé disparaît sinon sans laisser
+    // de quoi comprendre pourquoi (mauvais expéditeur ? zip absent ?).
+    const refuse = (raison) => {
+      console.log("REFUSÉ — " + raison + " | from=" + from + " | sujet=" + (message.headers.get("subject") || ""));
+      message.setReject(raison);
+    };
+
     if (!senderAllowed(from, env)) {
-      message.setReject("Expéditeur non autorisé");
+      refuse("Expéditeur non autorisé");
       return;
     }
 
@@ -266,14 +273,14 @@ export default {
       (a) => /\.zip$/i.test(a.filename) || /zip|x-compressed/.test(a.ctype)
     );
     if (!zip) {
-      message.setReject("Aucune pièce jointe .zip dans ce message");
+      refuse("Aucune pièce jointe .zip dans ce message");
       return;
     }
 
     const zipBytes = decodePart(zip.headers, zip.body);
     const chosen = pickWorkbook(listZipEntries(zipBytes));
     if (!chosen) {
-      message.setReject("Archive vide");
+      refuse("Archive vide");
       return;
     }
     const workbook = await extractEntry(zipBytes, chosen);
@@ -282,11 +289,11 @@ export default {
     // plutôt que d'écraser les données de la veille par du vide.
     const isXlsx = /\.xls[xm]?$/i.test(chosen.name);
     if (isXlsx && !(workbook[0] === 0x50 && workbook[1] === 0x4b)) {
-      message.setReject("Le classeur extrait n'est pas un fichier Excel valide");
+      refuse("Le classeur extrait n'est pas un fichier Excel valide");
       return;
     }
     if (workbook.length < 1024) {
-      message.setReject("Classeur suspect (" + workbook.length + " octets)");
+      refuse("Classeur suspect (" + workbook.length + " octets)");
       return;
     }
 

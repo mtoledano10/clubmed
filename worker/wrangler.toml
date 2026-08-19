@@ -11,4 +11,4 @@ bucket_name = "clubmed-offers"
 # Vide = tout expéditeur accepté. Renseigner l'adresse exacte de l'expéditeur
 # du mail quotidien, ou "@domaine.com" pour tout un domaine. Plusieurs valeurs
 # séparées par des virgules.
-ALLOWED_SENDERS = ""
+ALLOWED_SENDERS = "@clubmed.com"
