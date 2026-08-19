@@ -324,6 +324,9 @@ export default {
     const cors = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+      // Sans ça, fetch() côté navigateur ne voit PAS x-updated-at : seuls les
+      // en-têtes « sûrs » traversent le CORS, le reste doit être exposé ici.
+      "Access-Control-Expose-Headers": "x-updated-at, etag, content-length",
     };
     if (request.method === "OPTIONS") return new Response(null, { headers: cors });
 
@@ -352,7 +355,13 @@ export default {
       );
     }
 
-    const key = url.pathname.startsWith("/" + ARCHIVE_PREFIX) ? url.pathname.slice(1) : CURRENT_KEY;
+    // Routes explicites uniquement : sans ça, la moindre URL erronée renvoyait
+    // les 9 Mo du classeur, et « / » ne pouvait pas servir l'app elle-même.
+    let key = null;
+    if (url.pathname === "/" + CURRENT_KEY) key = CURRENT_KEY;
+    else if (/^\/archive\/\d{4}-\d{2}-\d{2}\.xlsx$/.test(url.pathname)) key = url.pathname.slice(1);
+    if (!key) return new Response("Page inconnue", { status: 404, headers: cors });
+
     const obj = await env.OFFERS.get(key, { onlyIf: request.headers });
     if (!obj) return new Response("Aucune donnée disponible", { status: 404, headers: cors });
 

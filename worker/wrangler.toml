@@ -2,6 +2,12 @@ name = "clubmed-offers"
 main = "offers-worker.js"
 compatibility_date = "2026-07-21"
 
+# L'app elle-même, servie par le worker : même origine que les données, donc
+# plus aucune requête cross-origine. .assetsignore à la racine ne laisse monter
+# que index.html (surtout pas OFFERS.xlsx ni .git).
+[assets]
+directory = "../"
+
 # Le classeur du jour + l'archive datée (14 jours glissants)
 [[r2_buckets]]
 binding = "OFFERS"
