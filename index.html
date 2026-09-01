@@ -374,6 +374,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1e293
       <button class="sbt" id="viewGrid" onclick="setView('grid',this)">📊 Grille prix</button>
       <span style="width:1px;background:#e5eaf2;margin:0 4px;align-self:stretch"></span>
       <button class="sbt" id="presetSki" onclick="presetSki()" title="Ski, départs du dimanche de décembre 2026 à avril 2027, 2 personnes en vol direct, en grille">❄️ Saison ski · 2 pers. vol direct · dim.</button>
+      <button class="sbt" id="shareBtn" onclick="copyShareLink()" title="Copier un lien qui rouvre exactement cette sélection">🔗 Copier le lien</button>
     </div>
   </div>
   <div class="rl" id="RL">
@@ -577,7 +578,11 @@ function parseExcel(buffer){
       document.getElementById("loadScreen").style.display="none";
       document.getElementById("appWrap").style.display="block";
       document.getElementById("DS").innerHTML=ALL.length.toLocaleString()+" offers<br><span style='opacity:.5'>EUR · 2 pax · "+freshnessLabel()+"</span>";
-      resetFiltersState(); buildFilters(); af();
+      resetFiltersState(); buildFilters();
+      const partage=applyStateFromUrl();
+      af();
+      if(partage) document.getElementById('searchStats').innerHTML=
+        '🔗 <strong>Sélection partagée</strong> appliquée — modifie les filtres librement, ou « Reset all » pour repartir de zéro.';
       initWho(); track('open');
     },300);
   }catch(e){ showErr(e.message); }
@@ -1041,6 +1046,126 @@ function setView(v,btn){
     if(!b.classList.contains('on')){b.style.background='';b.style.color='';b.style.borderColor='';}
   });
   render();
+}
+
+/* ── LIEN PARTAGEABLE ──
+   L'état des filtres tient dans l'URL : on peut envoyer une sélection à un
+   collègue ou se la garder en favori. Seuls les filtres qui s'écartent du
+   réglage par défaut sont écrits, pour que le lien reste court et lisible.
+   Les listes (semaines, resorts, codes chambre) ne sont incluses que si elles
+   forment un sous-ensemble raisonnable — sinon le lien deviendrait illisible
+   pour ne rien filtrer du tout. */
+function buildShareUrl(){
+  const p=[];
+  const add=(k,v)=>{if(v!==''&&v!=null)p.push(k+'='+v);};
+  if(CURRENT_VIEW!=='cards') add('v',CURRENT_VIEW);
+  if(ASGS.size) add('sg',[...ASGS].sort().join(','));
+  if(AM.size) add('m',[...AM].sort().map(k=>k.replace('-','')).join(','));
+  if(AFL!=='a') add('fl',AFL);
+  if(AOCC.size) add('occ',[...AOCC].sort().join(','));
+  if(ADOW.size) add('dow',[...ADOW].sort().join(','));
+  if(ADUR.size) add('dur',[...ADUR][0]);
+  const mp=(document.getElementById('MP').value||'').trim();
+  if(mp) add('max',mp);
+  if(SORT!=='p') add('sort',SORT);
+  if(SEARCH_TERM) add('q',encodeURIComponent(SEARCH_TERM));
+  if(MATRIX_PICK) add('pick',MATRIX_PICK.iso+'~'+encodeURIComponent(MATRIX_PICK.resort));
+  const wTot=document.querySelectorAll('#wItems .dd-i').length;
+  if(AW.size&&AW.size<wTot&&AW.size<=30) add('w',[...AW].sort().map(d=>d.replace(/-/g,'')).join(','));
+  if(AR.size&&AR.size<R.length&&AR.size<=25) add('r',[...AR].sort().map(encodeURIComponent).join(','));
+  if(ARC.size&&ARC.size<RC.length&&ARC.size<=25) add('rc',[...ARC].sort().map(encodeURIComponent).join(','));
+  return location.origin+location.pathname+(p.length?'?'+p.join('&'):'');
+}
+
+const CLES_PARTAGE=['v','sg','m','fl','occ','dow','dur','max','sort','q','pick','w','r','rc'];
+
+/** Rejoue un lien partagé. Retourne false si l'URL ne porte aucun filtre. */
+function applyStateFromUrl(){
+  const q=new URLSearchParams(location.search);
+  if(!CLES_PARTAGE.some(k=>q.has(k))) return false;
+  const liste=(k)=>(q.get(k)||'').split(',').filter(Boolean);
+  const coche=(sel,attr,vals)=>{
+    document.querySelectorAll(sel).forEach(b=>b.classList.toggle('on',vals.includes(b.dataset[attr])));
+    if(!vals.length){const t=document.querySelector(sel.replace(']','="a"]'));if(t)t.classList.add('on');}
+  };
+
+  if(q.has('sg')){const v=liste('sg');ASGS.clear();v.forEach(x=>ASGS.add(parseInt(x)));coche('[data-sg]','sg',v);}
+  if(q.has('m')){
+    const v=liste('m').map(x=>x.slice(0,4)+'-'+x.slice(4,6));
+    AM.clear();
+    document.querySelectorAll('.mo').forEach(el=>{const on=v.includes(el.dataset.mk);el.classList.toggle('on',on);if(on)AM.add(el.dataset.mk);});
+  }
+  if(q.has('fl')){AFL=q.get('fl');coche('[data-fl]','fl',[AFL]);}
+  if(q.has('occ')){const v=liste('occ');AOCC.clear();v.forEach(x=>AOCC.add(parseInt(x)));coche('[data-occ]','occ',v);}
+  if(q.has('dow')){const v=liste('dow');ADOW.clear();v.forEach(x=>ADOW.add(parseInt(x)));coche('[data-dow]','dow',v);}
+  if(q.has('dur')){const v=q.get('dur');ADUR.clear();ADUR.add(parseInt(v));coche('[data-dur]','dur',[v]);}
+  if(q.has('max')) document.getElementById('MP').value=q.get('max');
+  if(q.has('sort')){
+    SORT=q.get('sort');
+    const i={p:0,d:1,r:2}[SORT];
+    if(i!==undefined){const b=document.querySelectorAll('.sbt');b.forEach(x=>x.classList.remove('on'));if(b[i])b[i].classList.add('on');}
+  }
+  if(q.has('q')){
+    SEARCH_TERM=decodeURIComponent(q.get('q'));
+    document.getElementById('searchIn').value=SEARCH_TERM;
+    document.getElementById('searchClear').style.display='block';
+  }
+  if(q.has('pick')){
+    const [iso,nom]=q.get('pick').split('~');
+    if(iso&&nom) MATRIX_PICK={iso,resort:decodeURIComponent(nom)};
+  }
+  // Ensembles à cases cochées : par défaut tout est sélectionné, un paramètre
+  // signifie donc « restreindre à cette liste ».
+  const restreindre=(param,set,items,cle)=>{
+    if(!q.has(param)) return;
+    const v=liste(param).map(decodeURIComponent);
+    set.clear();
+    document.querySelectorAll(items).forEach(el=>{
+      const val=cle(el);
+      const on=v.includes(val);
+      el.classList.toggle('on',on);
+      const cb=el.querySelector('input'); if(cb) cb.checked=on;
+      if(on) set.add(val);
+    });
+  };
+  restreindre('w',AW,'#wItems .dd-i',el=>el.dataset.v);
+  restreindre('r',AR,'#rItems .dd-i',el=>R[parseInt(el.dataset.v)]);
+  restreindre('rc',ARC,'#rcItems .dd-i',el=>RC[parseInt(el.dataset.v)]);
+  if(q.has('w')){ // les semaines sont écrites sans tirets dans l'URL
+    const v=liste('w').map(x=>x.slice(0,4)+'-'+x.slice(4,6)+'-'+x.slice(6,8));
+    AW.clear();
+    document.querySelectorAll('#wItems .dd-i').forEach(el=>{
+      const on=v.includes(el.dataset.v);
+      el.classList.toggle('on',on);
+      const cb=el.querySelector('input'); if(cb) cb.checked=on;
+      if(on) AW.add(el.dataset.v);
+    });
+  }
+  ['w','r','rc'].forEach(id=>{try{updLbl(id);}catch(e){}});
+  if(q.has('v')){
+    const v=q.get('v');
+    const btn=document.getElementById(v==='grid'?'viewGrid':v==='table'?'viewTable':'viewCards');
+    if(btn) setView(v,btn);
+  }
+  return true;
+}
+
+function copyShareLink(){
+  const url=buildShareUrl();
+  const btn=document.getElementById('shareBtn');
+  const fini=(txt)=>{const av=btn.textContent;btn.textContent=txt;setTimeout(()=>{btn.textContent=av;},2000);};
+  const secours=()=>{
+    // navigator.clipboard peut être refusé : on laisse au moins l'URL copiable
+    const ta=document.createElement('textarea');
+    ta.value=url; ta.style.cssText='position:fixed;opacity:0';
+    document.body.appendChild(ta); ta.select();
+    let ok=false; try{ok=document.execCommand('copy');}catch(e){}
+    document.body.removeChild(ta);
+    if(ok) fini('✓ Lien copié'); else window.prompt('Copie ce lien :',url);
+  };
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(url).then(()=>fini('✓ Lien copié'),secours);
+  } else secours();
 }
 
 /* ── VUE GRILLE ──
