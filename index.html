@@ -373,7 +373,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1e293
       <button class="sbt" id="viewTable" onclick="setView('table',this)">⊞ Table</button>
       <button class="sbt" id="viewGrid" onclick="setView('grid',this)">📊 Grille prix</button>
       <span style="width:1px;background:#e5eaf2;margin:0 4px;align-self:stretch"></span>
-      <button class="sbt" id="presetSki" onclick="presetSki()" title="Ski, départs de décembre 2026 à avril 2027, en grille">❄️ Saison ski</button>
+      <button class="sbt" id="presetSki" onclick="presetSki()" title="Ski, départs de décembre 2026 à avril 2027, 2 personnes en vol direct, en grille">❄️ Saison ski · 2 pers. vol direct</button>
     </div>
   </div>
   <div class="rl" id="RL">
@@ -1132,7 +1132,9 @@ function pickCell(iso,resort){
   af();
 }
 
-/** Ski, départs de décembre 2026 à avril 2027, directement en grille */
+/** La vue commerciale de référence : ski, décembre 2026 → avril 2027,
+ *  2 personnes en vol direct — le seul cas réellement vendable en package,
+ *  puisque toute offre avec vol est en occupancy 2 dans le fichier. */
 function presetSki(){
   MATRIX_PICK=null;
   ASGS.clear();
@@ -1146,6 +1148,11 @@ function presetSki(){
     el.classList.toggle('on',dedans);
     if(dedans) AM.add(k);
   });
+  AFL='d';
+  document.querySelectorAll('[data-fl]').forEach(b=>b.classList.toggle('on',b.dataset.fl==='d'));
+  AOCC.clear(); AOCC.add(2);
+  document.querySelectorAll('[data-occ]').forEach(b=>b.classList.toggle('on',b.dataset.occ==='2'));
+  updateOccLock();
   setView('grid',document.getElementById('viewGrid'));
   af();
 }
