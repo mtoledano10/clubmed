@@ -176,6 +176,23 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1e293
 .retry-btn.show{display:inline-block}
 .reload-btn{position:fixed;top:12px;right:14px;z-index:500;background:rgba(255,255,255,.15);color:white;border:1px solid rgba(255,255,255,.3);border-radius:7px;padding:5px 11px;font-size:11px;font-weight:600;cursor:pointer}
 .reload-btn:hover{background:rgba(255,255,255,.25)}
+/* GRID VIEW — dates en lignes, villages en colonnes, prix mini en cases */
+.mx{border-collapse:separate;border-spacing:0;font-size:11px;background:white}
+.mx th,.mx td{border-bottom:1px solid #eef2f7;border-right:1px solid #eef2f7;white-space:nowrap}
+.mx thead th{position:sticky;top:0;z-index:3;background:#1a3a5c;color:white;padding:6px 5px;font-size:9.5px;font-weight:600;text-align:center}
+.mx thead th:first-child{left:0;z-index:4;text-align:left}
+.mx tbody th{position:sticky;left:0;z-index:2;background:white;padding:4px 9px;font-weight:600;color:#334155;text-align:left;font-size:10.5px}
+.mx td{padding:3px 7px;text-align:right;color:#1e293b;cursor:pointer}
+.mx td.vide{color:#dbe3ec;cursor:default;text-align:center}
+.mx td:hover:not(.vide){outline:2px solid #1a3a5c;outline-offset:-2px}
+.mx td.q1{background:#dcfce7;color:#14532d;font-weight:700}
+.mx td.q2{background:#f0fdf4}
+.mx td.q4{background:#fff7ed;color:#9a3412}
+.mx td.jour{box-shadow:inset 0 0 0 1.5px #f59e0b}
+.mx .tot{background:#f8fafc;font-weight:700;color:#1a3a5c}
+.mx tbody tr:hover th{background:#f0f7ff}
+.mx-lg{font-size:10.5px;color:#7c8fa6;padding:7px 3px;line-height:1.7}
+.mx-lg i{display:inline-block;width:11px;height:11px;border-radius:2px;vertical-align:-1px;margin:0 4px 0 12px;border:1px solid #e5eaf2}
 /* TABLE VIEW */
 .offer-table{width:100%;border-collapse:collapse;font-size:12px}
 .offer-table th{background:#1a3a5c;color:white;padding:7px 10px;text-align:left;font-size:10.5px;font-weight:600;position:sticky;top:0}
@@ -354,6 +371,9 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1e293
       <span style="width:1px;background:#e5eaf2;margin:0 4px;align-self:stretch"></span>
       <button class="sbt" id="viewCards" onclick="setView('cards',this)" style="background:#1a3a5c;color:white;border-color:#1a3a5c">≡ Cards</button>
       <button class="sbt" id="viewTable" onclick="setView('table',this)">⊞ Table</button>
+      <button class="sbt" id="viewGrid" onclick="setView('grid',this)">📊 Grille prix</button>
+      <span style="width:1px;background:#e5eaf2;margin:0 4px;align-self:stretch"></span>
+      <button class="sbt" id="presetSki" onclick="presetSki()" title="Ski, départs de décembre 2026 à avril 2027, en grille">❄️ Saison ski</button>
     </div>
   </div>
   <div class="rl" id="RL">
@@ -512,6 +532,9 @@ function parseExcel(buffer){
         }
       }
       // Format date EU
+      // On garde la date ISO avant reformatage : c'est elle qui trie et qui
+      // sert de clé de ligne à la vue Grille.
+      const isoDate=depStr;
       if(depStr){const p=depStr.split("-");depStr=p[2]+"/"+MON[parseInt(p[1])-1]+"/"+p[0];}
       let sg=1;
       if(SKI_R.includes(rname)){
@@ -526,7 +549,7 @@ function parseExcel(buffer){
       const occ=parseInt(row["Occupancy"])||2;
       return{
         ri:ri[rname]??0, ci:ci[row["Country"]]??0,
-        dd:depStr, pp, tp, disc,
+        dd:depStr, iso:isoDate, pp, tp, disc,
         rt:String(row["Room type"]||""),
         rc:String(row["Room code"]||""),
         dur:parseInt(row["Duration"])||7,
@@ -937,6 +960,7 @@ function updateFilterSummary(){
   if(AW.size>0&&AW.size<wTot) tags.push({label:'📅 '+AW.size+' week'+(AW.size>1?'s':''), fn:function(){AW.clear();document.querySelectorAll('.wk-item').forEach(e=>{e.classList.remove('on');const cb=e.querySelector('input');if(cb)cb.checked=false;});updLbl('w');af();}});
   if(AR.size>0&&AR.size<R.length) tags.push({label:'🏨 '+AR.size+' resort'+(AR.size>1?'s':''), fn:function(){AR.clear();document.querySelectorAll('.r-item').forEach(e=>{e.classList.remove('on');const cb=e.querySelector('input');if(cb)cb.checked=false;});updLbl('r');af();}});
   if(ARC.size>0&&ARC.size<RC.length) tags.push({label:'🛏 '+ARC.size+' code'+(ARC.size>1?'s':''), fn:function(){ARC.clear();document.querySelectorAll('#rcItems .dd-i').forEach(e=>{e.classList.remove('on');const cb=e.querySelector('input');if(cb)cb.checked=false;});updLbl('rc');af();}});
+  if(MATRIX_PICK) tags.push({label:'📌 '+MATRIX_PICK.resort+' · '+MATRIX_PICK.iso, fn:function(){MATRIX_PICK=null;af();}});
   const mp=parseFloat(document.getElementById('MP').value);
   if(mp>0) tags.push({label:'💶 Max €'+mp.toLocaleString(), fn:function(){document.getElementById('MP').value='';af();}});
   if(SEARCH_TERM) tags.push({label:'🔍 '+SEARCH_TERM, fn:clearSearch});
@@ -977,6 +1001,7 @@ function af(){
       const rt=(r.rt||'').toLowerCase();
       if(!rname.includes(SEARCH_TERM)&&!country.includes(SEARCH_TERM)&&!rt.includes(SEARCH_TERM))return false;
     }
+    if(MATRIX_PICK&&(r.iso!==MATRIX_PICK.iso||R[r.ri]!==MATRIX_PICK.resort))return false;
     if(ASGS.size>0&&!ASGS.has(r.sg))return false;
     if(ADOW.size>0&&!ADOW.has(r.dow))return false;
     if(ADUR.size>0&&!ADUR.has(parseInt(r.dur)))return false;
@@ -1009,13 +1034,120 @@ function sortData(){
 let CURRENT_VIEW='cards';
 function setView(v,btn){
   CURRENT_VIEW=v;
-  document.querySelectorAll('#viewCards,#viewTable').forEach(b=>b.classList.remove('on'));
+  document.querySelectorAll('#viewCards,#viewTable,#viewGrid').forEach(b=>b.classList.remove('on'));
   btn.classList.add('on');
   btn.style.background='#1a3a5c';btn.style.color='white';btn.style.borderColor='#1a3a5c';
-  document.querySelectorAll('#viewCards,#viewTable').forEach(b=>{
+  document.querySelectorAll('#viewCards,#viewTable,#viewGrid').forEach(b=>{
     if(!b.classList.contains('on')){b.style.background='';b.style.color='';b.style.borderColor='';}
   });
   render();
+}
+
+/* ── VUE GRILLE ──
+   Une ligne par date de départ, une colonne par village, le prix minimum
+   trouvé dans la case. C'est une synthèse : ce minimum agrège toutes les
+   chambres et toutes les occupations qui passent les filtres en cours. */
+const DOW3=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+let MATRIX_PICK=null;
+
+function renderMatrix(){
+  const list=document.getElementById('RL');
+  list.innerHTML='';
+  if(!FD.length){
+    list.innerHTML='<div class="empty"><div style="font-size:28px">📊</div><p style="font-weight:600;color:#374151;margin-top:4px">Rien à croiser</p><p style="font-size:11px">Élargis les filtres</p></div>';
+    document.getElementById('RC').innerHTML='<strong>0</strong> offers';
+    return;
+  }
+
+  const lignes=new Map();   // date ISO -> Map(village -> {min, n})
+  const villages=new Set();
+  FD.forEach(r=>{
+    if(!r.iso) return;
+    const nom=R[r.ri]||'';
+    villages.add(nom);
+    let m=lignes.get(r.iso);
+    if(!m){m=new Map();lignes.set(r.iso,m);}
+    const c=m.get(nom);
+    if(!c) m.set(nom,{min:r.pp,n:1});
+    else {c.n++; if(r.pp<c.min) c.min=r.pp;}
+  });
+  const noms=[...villages].sort();
+  const dates=[...lignes.keys()].sort();
+
+  // Échelle de couleur : quartiles sur l'ensemble des minima affichés
+  const valeurs=[];
+  lignes.forEach(m=>m.forEach(c=>valeurs.push(c.min)));
+  valeurs.sort((a,b)=>a-b);
+  const q=(p)=>valeurs[Math.floor((valeurs.length-1)*p)];
+  const q1=q(0.25),q2=q(0.5),q3=q(0.75);
+  const classe=(v)=>v<=q1?'q1':v<=q2?'q2':v<=q3?'':'q4';
+  const fmt=(v)=>v.toLocaleString('en-US');
+
+  let html='<div style="overflow:auto"><table class="mx"><thead><tr><th>Départ</th>';
+  noms.forEach(n=>{html+='<th title="'+n+'">'+n.replace(/ /g,'<br>')+'</th>';});
+  html+='<th class="tot">Min<br>du jour</th></tr></thead><tbody>';
+
+  dates.forEach(iso=>{
+    const m=lignes.get(iso);
+    const d=new Date(iso+'T12:00:00');
+    const minJour=Math.min(...[...m.values()].map(c=>c.min));
+    html+='<tr><th>'+DOW3[d.getDay()]+' '+String(d.getDate()).padStart(2,'0')+' '+MO[d.getMonth()]+
+      ' <span style="color:#a0adb8;font-weight:400">'+String(d.getFullYear()).slice(2)+'</span></th>';
+    noms.forEach(n=>{
+      const c=m.get(n);
+      if(!c){html+='<td class="vide">·</td>';return;}
+      html+='<td class="'+classe(c.min)+(c.min===minJour?' jour':'')+'" data-iso="'+iso+'" data-r="'+
+        n.replace(/"/g,'&quot;')+'" title="'+n+' — '+c.n+' offre'+(c.n>1?'s':'')+' à partir de '+fmt(c.min)+' € /pers.">'+
+        fmt(c.min)+'</td>';
+    });
+    html+='<td class="tot">'+fmt(minJour)+'</td></tr>';
+  });
+
+  // Pied de tableau : le meilleur prix de chaque village sur toute la période
+  html+='</tbody><tfoot><tr><th class="tot">Min du village</th>';
+  noms.forEach(n=>{
+    let mn=null;
+    lignes.forEach(m=>{const c=m.get(n);if(c&&(mn===null||c.min<mn))mn=c.min;});
+    html+='<td class="tot">'+(mn===null?'·':fmt(mn))+'</td>';
+  });
+  html+='<td class="tot">'+fmt(valeurs[0])+'</td></tr></tfoot></table></div>';
+
+  html+='<div class="mx-lg">Prix minimum <strong>par personne</strong>, toutes chambres et occupations confondues parmi les '+
+    FD.length.toLocaleString('en-US')+' offres filtrées — affine avec les filtres de gauche. '+
+    'Clique une case pour voir le détail de ce village à cette date.'+
+    '<br><i style="background:#dcfce7"></i>25 % les moins chers <i style="background:#f0fdf4"></i>sous la médiane '+
+    '<i style="background:white"></i>au-dessus <i style="background:#fff7ed"></i>25 % les plus chers '+
+    '<i style="background:white;box-shadow:inset 0 0 0 1.5px #f59e0b"></i>meilleur prix du jour</div>';
+
+  list.innerHTML=html;
+  list.querySelectorAll('.mx td[data-iso]').forEach(td=>{
+    td.addEventListener('click',()=>pickCell(td.dataset.iso,td.dataset.r));
+  });
+}
+
+/** Clic sur une case : on isole ce village à cette date et on repasse en cartes */
+function pickCell(iso,resort){
+  MATRIX_PICK={iso,resort};
+  setView('cards',document.getElementById('viewCards'));
+  af();
+}
+
+/** Ski, départs de décembre 2026 à avril 2027, directement en grille */
+function presetSki(){
+  MATRIX_PICK=null;
+  ASGS.clear();
+  document.querySelectorAll('[data-sg]').forEach(b=>b.classList.remove('on'));
+  ASGS.add(0);
+  document.querySelector('[data-sg="0"]').classList.add('on');
+  AM.clear();
+  document.querySelectorAll('.mo').forEach(el=>{
+    const k=el.dataset.mk||'';
+    const dedans=k>='2026-12'&&k<='2027-04'; // comparaison lexicale : les clés sont AAAA-MM
+    el.classList.toggle('on',dedans);
+    if(dedans) AM.add(k);
+  });
+  setView('grid',document.getElementById('viewGrid'));
+  af();
 }
 
 function renderTable(){
@@ -1085,6 +1217,7 @@ function render(){
   if(SEARCH_TERM) document.getElementById('searchStats').textContent = FD.length.toLocaleString()+' results for "'+SEARCH_TERM+'"';
   else document.getElementById('searchStats').textContent = '';
   if(CURRENT_VIEW==='table'){renderTable();return;}
+  if(CURRENT_VIEW==='grid'){renderMatrix();return;}
   FD.slice(0,PAGE).forEach((r,i)=>list.appendChild(mkCard(r,i===0)));
   DC=Math.min(PAGE,FD.length);
   if(FD.length>PAGE){
@@ -1277,7 +1410,7 @@ function tFl(id){
 
 /* ── RESET ── */
 function resetAll(){
-  ASG='a';AM.clear();AFL='a';
+  ASG='a';AM.clear();AFL='a';MATRIX_PICK=null;
   document.querySelector('[data-sg="a"]').click();
   document.querySelectorAll('.mo').forEach(el=>el.classList.remove('on'));
   document.querySelector('[data-fl="a"]').click();
