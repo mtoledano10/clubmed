@@ -176,6 +176,49 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1e293
 .retry-btn.show{display:inline-block}
 .reload-btn{position:fixed;top:12px;right:14px;z-index:500;background:rgba(255,255,255,.15);color:white;border:1px solid rgba(255,255,255,.3);border-radius:7px;padding:5px 11px;font-size:11px;font-weight:600;cursor:pointer}
 .reload-btn:hover{background:rgba(255,255,255,.25)}
+/* MOBILE — l'app est pensée pour un écran large : sur téléphone le panneau
+   de filtres devient un tiroir, et tout repasse sur une seule colonne. */
+.fbtn{display:none;background:rgba(255,255,255,.16);color:white;border:1px solid rgba(255,255,255,.3);
+      border-radius:8px;padding:6px 11px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+.backdrop{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:590}
+.lp-head{display:none;align-items:center;justify-content:space-between;padding:2px 4px 8px;border-bottom:1px solid #e5eaf2;margin-bottom:4px}
+.lp-head b{font-size:13px;color:#1a3a5c}
+.lp-head button{background:none;border:none;font-size:20px;color:#7c8fa6;cursor:pointer;line-height:1;padding:0 4px}
+
+@media (max-width:760px){
+  .fbtn{display:inline-block}
+  .reload-btn{display:none}          /* le fichier se met à jour tout seul */
+  .tagline{display:none}
+  .hdr{padding:10px 12px;gap:10px}
+  .logo{font-size:17px}
+  .hdr-info{font-size:9.5px;line-height:1.4}
+  .main{flex-direction:column;height:auto}
+  .lp{position:fixed;top:0;left:0;bottom:0;width:86%;max-width:330px;z-index:600;
+      transform:translateX(-100%);transition:transform .22s ease;box-shadow:0 0 26px rgba(0,0,0,.28)}
+  body.filters-open .lp{transform:none}
+  body.filters-open .backdrop{display:block}
+  .lp-head{display:flex}
+  .cp{min-height:55vh}
+  .rl{overflow:visible;flex:none;padding:6px}
+  /* 16 px minimum sur les champs : en dessous, iOS zoome à chaque focus */
+  .search-in,.pi,#whoIn,.dd-sch input{font-size:16px}
+  .search-bar{padding:7px 9px}
+  .card-body{flex-direction:column;gap:7px}
+  .card-right{min-width:0;text-align:left;align-items:center;flex-direction:row;flex-wrap:wrap;gap:7px}
+  .price{font-size:19px}
+  .rh{padding:6px 9px}
+  .sb{flex-wrap:wrap;row-gap:5px}    /* sinon la rangée de boutons pousse la page en travers */
+  .sb > span{display:none}           /* séparateurs verticaux : inutiles une fois sur deux lignes */
+  .sbt{padding:5px 9px;font-size:11.5px}
+  #presetSki,#shareBtn{font-size:11px}
+  .mx-lg{padding:7px 2px}
+  #whoBar{font-size:11.5px;padding:7px 10px}
+  /* Les détails de vol occupaient les deux tiers de chaque carte : on les
+     replie derrière un bouton, que le CSS d'origine masquait. */
+  .fl-tog{display:flex;align-items:center;gap:6px;padding:7px 12px;font-size:10.5px;
+          font-weight:600;color:#64748b;border-top:1px solid #edf2f7;cursor:pointer;background:white}
+  .fl-bd{display:none}
+}
 /* GRID VIEW — dates en lignes, villages en colonnes, prix mini en cases */
 .mx{border-collapse:separate;border-spacing:0;font-size:11px;background:white}
 .mx th,.mx td{border-bottom:1px solid #eef2f7;border-right:1px solid #eef2f7;white-space:nowrap}
@@ -240,8 +283,10 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1e293
     <div class="logo">Club<em>Med</em> <span style="font-weight:300;font-size:13px;opacity:.8">Offers</span></div>
     <div class="tagline">Smart Pricing Engine — Sales Team</div>
   </div>
+  <button class="fbtn" onclick="toggleFilters()">☰ Filtres</button>
   <div class="hdr-info" id="DS">—<br><span>EUR · /pp</span></div>
 </div>
+<div class="backdrop" onclick="toggleFilters(false)"></div>
 <div id="whoBar" style="display:none;background:#fffbe6;border-bottom:1px solid #f5e3a3;padding:7px 14px;font-size:12px;color:#7a5b00;display:none;align-items:center;gap:8px;flex-wrap:wrap">
   <span>👋 Bienvenue — ton prénom, pour le suivi d'utilisation de l'outil :</span>
   <input id="whoIn" placeholder="Prénom Nom" style="border:1px solid #e2cd8a;border-radius:6px;padding:4px 8px;font-size:12px;outline:none;min-width:150px" />
@@ -250,6 +295,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1e293
 </div>
 <div class="main">
 <div class="lp">
+  <div class="lp-head"><b>Filtres</b><button onclick="toggleFilters(false)" aria-label="Fermer">✕</button></div>
   <div>
     <div class="ft">🏷 Segment</div>
     <div class="seg-wrap">
@@ -1048,6 +1094,16 @@ function setView(v,btn){
   render();
 }
 
+/* ── TIROIR DE FILTRES (mobile) ── */
+const surMobile=()=>window.matchMedia('(max-width:760px)').matches;
+function toggleFilters(ouvrir){
+  const on=(ouvrir===undefined)?!document.body.classList.contains('filters-open'):!!ouvrir;
+  document.body.classList.toggle('filters-open',on);
+}
+/** Après une action qui produit un résultat, on referme le tiroir : sinon le
+ *  commercial reste devant ses filtres sans voir ce qu'il vient de demander. */
+function fermerFiltresSiMobile(){ if(surMobile()) toggleFilters(false); }
+
 /* ── LIEN PARTAGEABLE ──
    L'état des filtres tient dans l'URL : on peut envoyer une sélection à un
    collègue ou se la garder en favori. Seuls les filtres qui s'écartent du
@@ -1284,6 +1340,7 @@ function presetSki(){
   document.querySelectorAll('[data-dow]').forEach(b=>b.classList.toggle('on',b.dataset.dow==='0'));
   setView('grid',document.getElementById('viewGrid'));
   af();
+  fermerFiltresSiMobile();
 }
 
 function renderTable(){
@@ -1329,7 +1386,12 @@ function renderTable(){
     tbody.appendChild(tr);
   });
   table.appendChild(tbody);
-  list.appendChild(table);
+  // La table est large : elle défile dans son propre conteneur, sinon c'est la
+  // page entière qui part en travers sur téléphone.
+  const box=document.createElement('div');
+  box.style.overflow='auto';
+  box.appendChild(table);
+  list.appendChild(box);
   if(FD.length>200){
     const note=document.createElement('div');
     note.style.cssText='padding:8px 12px;font-size:11px;color:#94a3b8;text-align:center';
@@ -1809,6 +1871,7 @@ function nlSearch(){
   const compris=nlRecap(x);
   if(!compris.length){doSearch();return;} // rien de structuré : recherche texte
   nlApply(x);
+  fermerFiltresSiMobile();
   track('search',q,FD.length);
   const st=document.getElementById('searchStats');
   st.innerHTML='<strong style="color:#1a3a5c">Compris :</strong> '+compris.join(' · ')+
