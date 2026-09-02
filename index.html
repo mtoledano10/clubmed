@@ -664,9 +664,11 @@ function parseExcel(buffer){
       return Math.abs(n-p)<=1.2?n:Math.round(p);
     };
     /* Toutes les promos ne sont pas des pourcentages : 2 744 lignes portent une
-       remise en montant rond (600 €, 800 €, 1 400 €…). Les afficher en pourcentage
-       produisait des « −7 % », « −8 % » qui ne correspondent à aucune promo
-       commerciale. On distingue donc les deux natures. */
+       remise en montant rond (600 €, 800 €, 1 400 €…), qui donne des taux
+       bâtards (−7 %, −8 %) ne correspondant à aucun palier commercial.
+       La grille les affiche quand même en %, pour que toute la colonne se
+       compare d'un coup d'œil ; c'est l'infobulle qui précise la nature
+       (« palier » vs « montant fixe ») et le montant en euros. */
     const enPourcentage=(row)=>{
       const d=parseInt(row["Discount"])||0;
       if(!d) return false;
@@ -1435,9 +1437,9 @@ function renderMatrix(){
       const parPers=c.occ?Math.round(c.disc/c.occ):0;
       html+='<td class="'+classe(c)+(c.min===minJour?' jour':'')+(enHebreu?' heb':'')+'" data-iso="'+iso+'" data-r="'+
         n.replace(/"/g,'&quot;')+'" title="'+n+' — '+c.n+' offre'+(c.n>1?'s':'')+' à partir de '+fmt(c.min)+' € /pers.'+
-        (t>0?' · remise '+(c.canon?t+' % sur le séjour':'en montant fixe ('+t+' % effectifs)')+' (−'+fmt(parPers)+' € /pers.'+(c.code?', '+c.code:'')+')':' · aucune remise')+
+        (t>0?' · remise '+t+' % sur le séjour'+(c.canon?'':' (promo en montant fixe : '+t+' % effectifs)')+' (−'+fmt(parPers)+' € /pers.'+(c.code?', '+c.code:'')+')':' · aucune remise')+
         (enHebreu?' — encadrement en hébreu'+(fete?' · '+fete:'')+(estNeuf(iso,n)?' · nouveau village':''):'')+'">'+
-        fmt(c.min)+(t>0?'<span class="rem">−'+(c.canon?t+'%':fmt(parPers)+' €')+'</span>':'')+'</td>';
+        fmt(c.min)+(t>0?'<span class="rem">−'+t+'%</span>':'')+'</td>';
     });
     html+='<td class="tot">'+fmt(minJour)+'</td></tr>';
   });
