@@ -241,6 +241,15 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1e293
 .mx td.jour{box-shadow:inset 0 0 0 1.5px #f59e0b}
 .mx .tot{background:#f8fafc;font-weight:700;color:#1a3a5c}
 .mx tbody tr:hover th{background:#f0f7ff}
+/* Départs encadrés en hébreu : pastille bleue, sans écraser la couleur de prix */
+.mx td.heb{position:relative;padding-left:16px}
+.mx td.heb::before{content:'';position:absolute;left:5px;top:50%;transform:translateY(-50%);
+  width:7px;height:7px;border-radius:50%;background:#2563eb;box-shadow:0 0 0 1.5px white}
+.heb-f{background:#ea580c;color:white;font-size:8.5px;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:5px;letter-spacing:.3px}
+/* spécificité : .mx tbody th (0,1,2) l'emporterait sur un simple .heb-d */
+.mx tbody th.heb-d{color:#2563eb;font-weight:700}
+.b-heb{background:#dbeafe;color:#1d4ed8}
+.b-fete{background:#ffedd5;color:#9a3412}
 .mx-lg{font-size:10.5px;color:#7c8fa6;padding:7px 3px;line-height:1.7}
 .mx-lg i{display:inline-block;width:11px;height:11px;border-radius:2px;vertical-align:-1px;margin:0 4px 0 12px;border:1px solid #e5eaf2}
 /* TABLE VIEW */
@@ -355,6 +364,14 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1e293
     </div>
   </div>
   <div>
+    <div class="ft">🇮🇱 Encadrement en hébreu</div>
+    <div class="fg">
+      <button class="fb on" data-heb="a" onclick="setHeb(this)">All departures</button>
+      <button class="fb" data-heb="1" onclick="setHeb(this)">🇮🇱 Ski en hébreu seulement</button>
+      <div style="font-size:9.5px;color:#94a3b8;padding:2px 4px;margin-top:1px">Calendrier Israël 2026/27 · Hanoucah · Pourim · Pessah</div>
+    </div>
+  </div>
+  <div>
     <div class="ft">✈ Flight Type</div>
     <div class="fg">
       <button class="fb on" data-fl="a" onclick="setFl(this)">All</button>
@@ -452,7 +469,36 @@ const SCCLS = ["c0","c1","c2","c3"];
 const SKI_R = ["Alpe d'Huez","Grand Massif Samoens Morillon","La Plagne 2100","La Rosiere","Les Arcs Panorama","Peisey-Vallandry","Pragelato Sestriere","Serre Chevalier","Tignes","Val Thorens Sensations","Val d'Isere","Valmorel"];
 const LONG_R = ["Cancun","Kani","La Plantation d'Albion Club Med","La Pointe aux Canonniers","Miches Playa Esmeralda","Phuket","Punta Cana","Seychelles","The Finolhu Villas"];
 
+/* ── DÉPARTS SKI ENCADRÉS EN HÉBREU — saison 2026/27 ──
+   Calendrier fourni par l'équipe (tableau du 02/09/2026). Les noms de villages
+   sont écrits ici EXACTEMENT comme dans le fichier d'offres (« Peisey-Vallandry »
+   avec trait d'union, « Les Arcs Panorama » avec l'article) : la correspondance
+   se fait par égalité stricte, une faute de frappe rendrait la ligne invisible.
+   Un contrôle au chargement signale toute date ou village introuvable. */
+const SKI_HE=[
+  {d:'2026-12-06',fete:'Hanoucah',v:['Tignes',"Val d'Isere","Alpe d'Huez"]},
+  {d:'2027-01-10',v:['La Rosiere'],neuf:['La Rosiere']},
+  {d:'2027-01-17',v:['Peisey-Vallandry','La Rosiere'],neuf:['La Rosiere']},
+  {d:'2027-01-24',v:['La Rosiere'],neuf:['La Rosiere']},
+  {d:'2027-01-31',v:['Peisey-Vallandry','Serre Chevalier']},
+  {d:'2027-02-28',v:["Alpe d'Huez"]},
+  {d:'2027-03-07',v:['Peisey-Vallandry',"Alpe d'Huez",'Valmorel']},
+  {d:'2027-03-14',v:["Alpe d'Huez"]},
+  {d:'2027-03-21',fete:'Pourim',v:['Peisey-Vallandry','Serre Chevalier','Tignes','Les Arcs Panorama','La Rosiere']},
+  {d:'2027-03-28',v:["Alpe d'Huez"]},
+  {d:'2027-04-04',v:["Alpe d'Huez"]},
+  {d:'2027-04-11',fete:'Pessah',v:['Tignes',"Val d'Isere",'Les Arcs Panorama',"Alpe d'Huez"]},
+  {d:'2027-04-18',fete:'Pessah',v:['Tignes',"Val d'Isere",'Les Arcs Panorama']},
+  {d:'2027-04-25',fete:'Pessah',v:['Tignes']}
+];
+const SKI_HE_MAP=Object.fromEntries(SKI_HE.map(x=>[x.d,x]));
+/** Ce départ (date + village) fait-il partie du programme hébreu ? */
+function estHebreu(r){const e=SKI_HE_MAP[r.iso];return !!e&&e.v.indexOf(R[r.ri])>=0;}
+function feteDe(iso){const e=SKI_HE_MAP[iso];return e&&e.fete?e.fete:'';}
+function estNeuf(iso,nom){const e=SKI_HE_MAP[iso];return !!(e&&e.neuf&&e.neuf.indexOf(nom)>=0);}
+
 let R=[],C=[],RC=[],U=[],ALL=[],FD=[];
+let AHEB=false;
 let AW=new Set(),AM=new Set(),AR=new Set(),ARC=new Set(),APROM=new Set();
 let ASGS=new Set(),AFL="a",AOCC=new Set(),ADOW=new Set(),ADUR=new Set(),SORT="p",DC=0;
 const PAGE=60;
@@ -848,6 +894,12 @@ function setDow(btn){
   af();
 }
 
+function setHeb(btn){
+  AHEB=(btn.dataset.heb==='1')&&!AHEB;   // re-clic = on retire le filtre
+  document.querySelectorAll('[data-heb]').forEach(b=>b.classList.toggle('on',b.dataset.heb===(AHEB?'1':'a')));
+  af();
+}
+
 function setFl(btn){
   // Re-cliquer le type de vol actif revient à « All »
   const v=(AFL===btn.dataset.fl&&AFL!=='a')?'a':btn.dataset.fl;
@@ -1036,6 +1088,7 @@ function updateFilterSummary(){
   if(AW.size>0&&AW.size<wTot) tags.push({label:'📅 '+AW.size+' week'+(AW.size>1?'s':''), fn:function(){AW.clear();document.querySelectorAll('.wk-item').forEach(e=>{e.classList.remove('on');const cb=e.querySelector('input');if(cb)cb.checked=false;});updLbl('w');af();}});
   if(AR.size>0&&AR.size<R.length) tags.push({label:'🏨 '+AR.size+' resort'+(AR.size>1?'s':''), fn:function(){AR.clear();document.querySelectorAll('.r-item').forEach(e=>{e.classList.remove('on');const cb=e.querySelector('input');if(cb)cb.checked=false;});updLbl('r');af();}});
   if(ARC.size>0&&ARC.size<RC.length) tags.push({label:'🛏 '+ARC.size+' code'+(ARC.size>1?'s':''), fn:function(){ARC.clear();document.querySelectorAll('#rcItems .dd-i').forEach(e=>{e.classList.remove('on');const cb=e.querySelector('input');if(cb)cb.checked=false;});updLbl('rc');af();}});
+  if(AHEB) tags.push({label:'🇮🇱 Hébreu', fn:function(){AHEB=false;document.querySelectorAll('[data-heb]').forEach(b=>b.classList.toggle('on',b.dataset.heb==='a'));af();}});
   if(MATRIX_PICK) tags.push({label:'📌 '+MATRIX_PICK.resort+' · '+MATRIX_PICK.iso, fn:function(){MATRIX_PICK=null;af();}});
   const mp=parseFloat(document.getElementById('MP').value);
   if(mp>0) tags.push({label:'💶 Max €'+mp.toLocaleString(), fn:function(){document.getElementById('MP').value='';af();}});
@@ -1077,6 +1130,7 @@ function af(){
       const rt=(r.rt||'').toLowerCase();
       if(!rname.includes(SEARCH_TERM)&&!country.includes(SEARCH_TERM)&&!rt.includes(SEARCH_TERM))return false;
     }
+    if(AHEB&&!estHebreu(r))return false;
     if(MATRIX_PICK&&(r.iso!==MATRIX_PICK.iso||R[r.ri]!==MATRIX_PICK.resort))return false;
     if(ASGS.size>0&&!ASGS.has(r.sg))return false;
     if(ADOW.size>0&&!ADOW.has(r.dow))return false;
@@ -1150,6 +1204,7 @@ function buildShareUrl(){
   if(mp) add('max',mp);
   if(SORT!=='p') add('sort',SORT);
   if(SEARCH_TERM) add('q',encodeURIComponent(SEARCH_TERM));
+  if(AHEB) add('heb','1');
   if(MATRIX_PICK) add('pick',MATRIX_PICK.iso+'~'+encodeURIComponent(MATRIX_PICK.resort));
   const wTot=document.querySelectorAll('#wItems .dd-i').length;
   if(AW.size&&AW.size<wTot&&AW.size<=30) add('w',[...AW].sort().map(d=>d.replace(/-/g,'')).join(','));
@@ -1158,7 +1213,7 @@ function buildShareUrl(){
   return location.origin+location.pathname+(p.length?'?'+p.join('&'):'');
 }
 
-const CLES_PARTAGE=['v','sg','m','fl','occ','dow','dur','max','sort','q','pick','w','r','rc'];
+const CLES_PARTAGE=['v','sg','m','fl','occ','dow','dur','max','sort','q','pick','w','r','rc','heb'];
 
 /** Rejoue un lien partagé. Retourne false si l'URL ne porte aucun filtre. */
 function applyStateFromUrl(){
@@ -1177,6 +1232,7 @@ function applyStateFromUrl(){
     document.querySelectorAll('.mo').forEach(el=>{const on=v.includes(el.dataset.mk);el.classList.toggle('on',on);if(on)AM.add(el.dataset.mk);});
   }
   if(q.has('fl')){AFL=q.get('fl');coche('[data-fl]','fl',[AFL]);}
+  if(q.get('heb')==='1'){AHEB=true;document.querySelectorAll('[data-heb]').forEach(b=>b.classList.toggle('on',b.dataset.heb==='1'));}
   if(q.has('occ')){const v=liste('occ');AOCC.clear();v.forEach(x=>AOCC.add(parseInt(x)));coche('[data-occ]','occ',v);}
   if(q.has('dow')){const v=liste('dow');ADOW.clear();v.forEach(x=>ADOW.add(parseInt(x)));coche('[data-dow]','dow',v);}
   if(q.has('dur')){const v=q.get('dur');ADUR.clear();ADUR.add(parseInt(v));coche('[data-dur]','dur',[v]);}
@@ -1297,13 +1353,18 @@ function renderMatrix(){
     const m=lignes.get(iso);
     const d=new Date(iso+'T12:00:00');
     const minJour=Math.min(...[...m.values()].map(c=>c.min));
-    html+='<tr><th>'+DOW3[d.getDay()]+' '+String(d.getDate()).padStart(2,'0')+' '+MO[d.getMonth()]+
-      ' <span style="color:#a0adb8;font-weight:400">'+String(d.getFullYear()).slice(2)+'</span></th>';
+    const he=SKI_HE_MAP[iso];
+    const fete=feteDe(iso);
+    html+='<tr><th'+(he?' class="heb-d"':'')+'>'+(he?'🇮🇱 ':'')+DOW3[d.getDay()]+' '+String(d.getDate()).padStart(2,'0')+' '+MO[d.getMonth()]+
+      ' <span style="color:#a0adb8;font-weight:400">'+String(d.getFullYear()).slice(2)+'</span>'+
+      (fete?'<span class="heb-f">'+fete+'</span>':'')+'</th>';
     noms.forEach(n=>{
       const c=m.get(n);
-      if(!c){html+='<td class="vide">·</td>';return;}
-      html+='<td class="'+classe(c.min)+(c.min===minJour?' jour':'')+'" data-iso="'+iso+'" data-r="'+
-        n.replace(/"/g,'&quot;')+'" title="'+n+' — '+c.n+' offre'+(c.n>1?'s':'')+' à partir de '+fmt(c.min)+' € /pers.">'+
+      const enHebreu=!!(he&&he.v.indexOf(n)>=0);
+      if(!c){html+='<td class="vide'+(enHebreu?' heb':'')+'">·</td>';return;}
+      html+='<td class="'+classe(c.min)+(c.min===minJour?' jour':'')+(enHebreu?' heb':'')+'" data-iso="'+iso+'" data-r="'+
+        n.replace(/"/g,'&quot;')+'" title="'+n+' — '+c.n+' offre'+(c.n>1?'s':'')+' à partir de '+fmt(c.min)+' € /pers.'+
+        (enHebreu?' — encadrement en hébreu'+(fete?' · '+fete:'')+(estNeuf(iso,n)?' · nouveau village':''):'')+'">'+
         fmt(c.min)+'</td>';
     });
     html+='<td class="tot">'+fmt(minJour)+'</td></tr>';
@@ -1323,7 +1384,8 @@ function renderMatrix(){
     'Clique une case pour voir le détail de ce village à cette date.'+
     '<br><i style="background:#dcfce7"></i>25 % les moins chers <i style="background:#f0fdf4"></i>sous la médiane '+
     '<i style="background:white"></i>au-dessus <i style="background:#fff7ed"></i>25 % les plus chers '+
-    '<i style="background:white;box-shadow:inset 0 0 0 1.5px #f59e0b"></i>meilleur prix du jour</div>';
+    '<i style="background:white;box-shadow:inset 0 0 0 1.5px #f59e0b"></i>meilleur prix du jour'+
+    '<i style="background:#2563eb;border-radius:50%"></i>départ encadré en hébreu (🇮🇱 sur la date)</div>';
 
   list.innerHTML=html;
   list.querySelectorAll('.mx td[data-iso]').forEach(td=>{
@@ -1580,6 +1642,8 @@ function mkCard(r,best){
         '<div class="bdgs">' +
           (best?'<span class="b b-best">Best</span>':'') +
           '<span class="b '+sbc+'">'+segName+'</span>' +
+          (estHebreu(r)?'<span class="b b-heb">🇮🇱 Hébreu</span>':'') +
+          (estHebreu(r)&&feteDe(r.iso)?'<span class="b b-fete">'+feteDe(r.iso)+'</span>':'') +
           promo +
         '</div>' +
         '<div class="rname">'+rname+'</div>' +
@@ -1633,7 +1697,8 @@ function tFl(id){
 
 /* ── RESET ── */
 function resetAll(){
-  ASG='a';AM.clear();AFL='a';MATRIX_PICK=null;
+  ASG='a';AM.clear();AFL='a';MATRIX_PICK=null;AHEB=false;
+  document.querySelectorAll('[data-heb]').forEach(b=>b.classList.toggle('on',b.dataset.heb==='a'));
   document.querySelector('[data-sg="a"]').click();
   document.querySelectorAll('.mo').forEach(el=>el.classList.remove('on'));
   document.querySelector('[data-fl="a"]').click();
