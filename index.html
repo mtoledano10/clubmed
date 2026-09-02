@@ -238,11 +238,14 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1e293
 /* Fond = niveau de remise du prix affiché. Le découpage suit les données
    réelles : la remise plafonne à 14,9 % (CMDAYS), donc des paliers à 20 ou
    25 % ne s'allumeraient jamais. */
-.mx td.pr1{background:#f0fdf4}
-.mx td.pr2{background:#dcfce7}
-.mx td.pr3{background:#bbf7d0;color:#14532d;font-weight:700}
+.mx td.pr1{background:#dcfce7;color:#166534}
+.mx td.pr2{background:#86efac;color:#14532d;font-weight:600}
+.mx td.pr3{background:#15803d;color:white;font-weight:700}
 .mx td.pr0{color:#64748b}
 .mx .rem{display:block;font-size:8.5px;font-weight:700;color:#15803d;line-height:1.15;letter-spacing:-.2px}
+/* sur le vert soutenu du palier 15 %, le vert du taux serait illisible */
+.mx td.pr3 .rem{color:#dcfce7}
+.mx td.pr2 .rem{color:#14532d}
 .mx td.jour{box-shadow:inset 0 0 0 1.5px #f59e0b}
 .mx .tot{background:#f8fafc;font-weight:700;color:#1a3a5c}
 .mx tbody tr:hover th{background:#f0f7ff}
@@ -1435,9 +1438,12 @@ function renderMatrix(){
       const parPers=c.occ?Math.round(c.disc/c.occ):0;
       html+='<td class="'+classe(c)+(c.min===minJour?' jour':'')+(enHebreu?' heb':'')+'" data-iso="'+iso+'" data-r="'+
         n.replace(/"/g,'&quot;')+'" title="'+n+' — '+c.n+' offre'+(c.n>1?'s':'')+' à partir de '+fmt(c.min)+' € /pers.'+
-        (t>0?' · remise '+(c.canon?t+' % sur le séjour':'en montant fixe ('+t+' % effectifs)')+' (−'+fmt(parPers)+' € /pers.'+(c.code?', '+c.code:'')+')':' · aucune remise')+
+        (t>0?' · remise '+t+' % sur le séjour'+(c.canon?'':' (promo en montant fixe : '+t+' % effectifs)')+' (−'+fmt(parPers)+' € /pers.'+(c.code?', '+c.code:'')+')':' · aucune remise')+
         (enHebreu?' — encadrement en hébreu'+(fete?' · '+fete:'')+(estNeuf(iso,n)?' · nouveau village':''):'')+'">'+
-        fmt(c.min)+(t>0?'<span class="rem">−'+(c.canon?t+'%':fmt(parPers)+' €')+'</span>':'')+'</td>';
+        // Toujours un pourcentage, jamais un montant : deux unités dans la même
+        // colonne ne se comparent pas d'un coup d'œil. Pour une promo en montant
+        // fixe, c'est le taux réellement obtenu — d'où des valeurs hors 5/10/15.
+        fmt(c.min)+(t>0?'<span class="rem">−'+t+'%</span>':'')+'</td>';
     });
     html+='<td class="tot">'+fmt(minJour)+'</td></tr>';
   });
@@ -1461,8 +1467,8 @@ function renderMatrix(){
     FD.length.toLocaleString('en-US')+' offres filtrées — affine avec les filtres de gauche. '+
     'Clique une case pour voir le détail de ce village à cette date.'+
     '<br>Fond = <strong>remise sur le séjour</strong> (le vol, lui, ne bénéficie pas de la remise) : '+
-    '<i style="background:#bbf7d0"></i>15 % et plus <i style="background:#dcfce7"></i>10 % '+
-    '<i style="background:#f0fdf4"></i>5 % <i style="background:white"></i>aucune remise'+
+    '<i style="background:#15803d"></i>15 % et plus <i style="background:#86efac"></i>10 % '+
+    '<i style="background:#dcfce7"></i>5 % <i style="background:white"></i>aucune remise'+
     '<br><i style="background:white;box-shadow:inset 0 0 0 1.5px #f59e0b"></i>meilleur prix du jour'+
     '<i style="background:#2563eb;border-radius:50%"></i>départ encadré en hébreu (🇮🇱 sur la date)</div>';
 
