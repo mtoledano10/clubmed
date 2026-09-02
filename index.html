@@ -235,9 +235,14 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1e293
 .mx td{padding:3px 7px;text-align:right;color:#1e293b;cursor:pointer}
 .mx td.vide{color:#dbe3ec;cursor:default;text-align:center}
 .mx td:hover:not(.vide){outline:2px solid #1a3a5c;outline-offset:-2px}
-.mx td.q1{background:#dcfce7;color:#14532d;font-weight:700}
-.mx td.q2{background:#f0fdf4}
-.mx td.q4{background:#fff7ed;color:#9a3412}
+/* Fond = niveau de remise du prix affiché. Le découpage suit les données
+   réelles : la remise plafonne à 14,9 % (CMDAYS), donc des paliers à 20 ou
+   25 % ne s'allumeraient jamais. */
+.mx td.pr1{background:#f0fdf4}
+.mx td.pr2{background:#dcfce7}
+.mx td.pr3{background:#bbf7d0;color:#14532d;font-weight:700}
+.mx td.pr0{color:#64748b}
+.mx .rem{display:block;font-size:8.5px;font-weight:700;color:#15803d;line-height:1.15;letter-spacing:-.2px}
 .mx td.jour{box-shadow:inset 0 0 0 1.5px #f59e0b}
 .mx .tot{background:#f8fafc;font-weight:700;color:#1a3a5c}
 .mx tbody tr:hover th{background:#f0f7ff}
@@ -250,6 +255,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1e293
 .mx tbody th.heb-d{color:#2563eb;font-weight:700}
 .b-heb{background:#dbeafe;color:#1d4ed8}
 .b-fete{background:#ffedd5;color:#9a3412}
+.pct-bar{display:flex;gap:5px;align-items:center;flex-wrap:wrap;padding:9px 3px 3px;font-size:11px;color:#64748b}
 .mx-lg{font-size:10.5px;color:#7c8fa6;padding:7px 3px;line-height:1.7}
 .mx-lg i{display:inline-block;width:11px;height:11px;border-radius:2px;vertical-align:-1px;margin:0 4px 0 12px;border:1px solid #e5eaf2}
 /* TABLE VIEW */
@@ -499,6 +505,24 @@ function estNeuf(iso,nom){const e=SKI_HE_MAP[iso];return !!(e&&e.neuf&&e.neuf.in
 
 let R=[],C=[],RC=[],U=[],ALL=[],FD=[];
 let AHEB=false;
+/* Paliers de remise sélectionnés. Les seuils sont exactement ceux des couleurs
+   de la grille : ce qu'on voit et ce qu'on filtre ne peuvent pas diverger. */
+let APCT=new Set();
+const palierPct=(p)=>{p=p||0;return p>=15?'15':p>=10?'10':p>=5?'5':'0';};
+const PALIERS=[['a','Toutes'],['15','15 % et +'],['10','10 %'],['5','5 %'],['0','Sans remise']];
+function setPct(v){
+  if(v==='a') APCT.clear();
+  else if(APCT.has(v)) APCT.delete(v);   // re-clic = on retire ce palier
+  else APCT.add(v);
+  syncPct();
+  af();
+}
+function syncPct(){
+  document.querySelectorAll('[data-pct]').forEach(b=>{
+    const v=b.dataset.pct;
+    b.classList.toggle('on',v==='a'?APCT.size===0:APCT.has(v));
+  });
+}
 let AW=new Set(),AM=new Set(),AR=new Set(),ARC=new Set(),APROM=new Set();
 let ASGS=new Set(),AFL="a",AOCC=new Set(),ADOW=new Set(),ADUR=new Set(),SORT="p",DC=0;
 const PAGE=60;
@@ -614,6 +638,46 @@ function parseExcel(buffer){
     const ri=Object.fromEntries(R.map((r,i)=>[r,i]));
     const ci=Object.fromEntries(C.map((c,i)=>[c,i]));
     setP("Processing rows...",92);
+
+    /* Taux de remise NOMINAL (5, 10, 15 %…).
+       La remise ne porte que sur la partie séjour : pour un forfait avec vol,
+       la rapporter au total donnerait 8 % au lieu de 15 %, le vol n'étant pas
+       remisé. Vérifié sur le fichier : pour un même séjour, le montant de la
+       remise est identique avec et sans vol. On retrouve donc le taux nominal
+       en rapportant la remise au prix du même séjour SANS vol. */
+    const cleSejour=(r)=>[r["Resort Name"],r["Date de depart"],r["Duration"],r["Room code"],r["Occupancy"],r["Offer code"]].join("|");
+    const baseSejour={};
+    rows.forEach(r=>{
+      if(!String(r["Departure point"]||"").trim()) baseSejour[cleSejour(r)]=parseFloat(r["Original total"])||0;
+    });
+    const NIVEAUX=[5,10,15,20,25,30];
+    const tauxNominal=(row)=>{
+      const d=parseInt(row["Discount"])||0;
+      if(!d) return 0;
+      const avecVol=!!String(row["Departure point"]||"").trim();
+      const base=avecVol?baseSejour[cleSejour(row)]:(parseFloat(row["Original total"])||0);
+      if(!base) return 0;
+      const p=d/base*100;
+      const n=NIVEAUX.reduce((a,b)=>Math.abs(b-p)<Math.abs(a-p)?b:a);
+      // Les taux réels tombent à 14,8-14,9 % plutôt qu'à 15 pile : on recale
+      // sur le palier commercial quand l'écart relève de l'arrondi.
+      return Math.abs(n-p)<=1.2?n:Math.round(p);
+    };
+    /* Toutes les promos ne sont pas des pourcentages : 2 744 lignes portent une
+       remise en montant rond (600 €, 800 €, 1 400 €…). Les afficher en pourcentage
+       produisait des « −7 % », « −8 % » qui ne correspondent à aucune promo
+       commerciale. On distingue donc les deux natures. */
+    const enPourcentage=(row)=>{
+      const d=parseInt(row["Discount"])||0;
+      if(!d) return false;
+      const avecVol=!!String(row["Departure point"]||"").trim();
+      const base=avecVol?baseSejour[cleSejour(row)]:(parseFloat(row["Original total"])||0);
+      if(!base) return false;
+      const p=d/base*100;
+      const n=NIVEAUX.reduce((a,b)=>Math.abs(b-p)<Math.abs(a-p)?b:a);
+      return Math.abs(n-p)<=1.2;
+    };
+
     ALL=rows.map(row=>{
       const rname=row["Resort Name"]||"";
       const dep=row["Date de depart"];
@@ -649,7 +713,7 @@ function parseExcel(buffer){
       const occ=parseInt(row["Occupancy"])||2;
       return{
         ri:ri[rname]??0, ci:ci[row["Country"]]??0,
-        dd:depStr, iso:isoDate, pp, tp, disc,
+        dd:depStr, iso:isoDate, pp, tp, disc, pct:tauxNominal(row), canon:enPourcentage(row),
         rt:String(row["Room type"]||""),
         rc:String(row["Room code"]||""),
         dur:parseInt(row["Duration"])||7,
@@ -1088,6 +1152,7 @@ function updateFilterSummary(){
   if(AW.size>0&&AW.size<wTot) tags.push({label:'📅 '+AW.size+' week'+(AW.size>1?'s':''), fn:function(){AW.clear();document.querySelectorAll('.wk-item').forEach(e=>{e.classList.remove('on');const cb=e.querySelector('input');if(cb)cb.checked=false;});updLbl('w');af();}});
   if(AR.size>0&&AR.size<R.length) tags.push({label:'🏨 '+AR.size+' resort'+(AR.size>1?'s':''), fn:function(){AR.clear();document.querySelectorAll('.r-item').forEach(e=>{e.classList.remove('on');const cb=e.querySelector('input');if(cb)cb.checked=false;});updLbl('r');af();}});
   if(ARC.size>0&&ARC.size<RC.length) tags.push({label:'🛏 '+ARC.size+' code'+(ARC.size>1?'s':''), fn:function(){ARC.clear();document.querySelectorAll('#rcItems .dd-i').forEach(e=>{e.classList.remove('on');const cb=e.querySelector('input');if(cb)cb.checked=false;});updLbl('rc');af();}});
+  if(APCT.size) tags.push({label:'Remise '+[...APCT].sort().map(v=>v==='0'?'aucune':v+' %').join(', '), fn:function(){APCT.clear();syncPct();af();}});
   if(AHEB) tags.push({label:'🇮🇱 Hébreu', fn:function(){AHEB=false;document.querySelectorAll('[data-heb]').forEach(b=>b.classList.toggle('on',b.dataset.heb==='a'));af();}});
   if(MATRIX_PICK) tags.push({label:'📌 '+MATRIX_PICK.resort+' · '+MATRIX_PICK.iso, fn:function(){MATRIX_PICK=null;af();}});
   const mp=parseFloat(document.getElementById('MP').value);
@@ -1130,6 +1195,7 @@ function af(){
       const rt=(r.rt||'').toLowerCase();
       if(!rname.includes(SEARCH_TERM)&&!country.includes(SEARCH_TERM)&&!rt.includes(SEARCH_TERM))return false;
     }
+    if(APCT.size&&!APCT.has(palierPct(r.pct)))return false;
     if(AHEB&&!estHebreu(r))return false;
     if(MATRIX_PICK&&(r.iso!==MATRIX_PICK.iso||R[r.ri]!==MATRIX_PICK.resort))return false;
     if(ASGS.size>0&&!ASGS.has(r.sg))return false;
@@ -1204,6 +1270,7 @@ function buildShareUrl(){
   if(mp) add('max',mp);
   if(SORT!=='p') add('sort',SORT);
   if(SEARCH_TERM) add('q',encodeURIComponent(SEARCH_TERM));
+  if(APCT.size) add('pct',[...APCT].sort().join(','));
   if(AHEB) add('heb','1');
   if(MATRIX_PICK) add('pick',MATRIX_PICK.iso+'~'+encodeURIComponent(MATRIX_PICK.resort));
   const wTot=document.querySelectorAll('#wItems .dd-i').length;
@@ -1213,7 +1280,7 @@ function buildShareUrl(){
   return location.origin+location.pathname+(p.length?'?'+p.join('&'):'');
 }
 
-const CLES_PARTAGE=['v','sg','m','fl','occ','dow','dur','max','sort','q','pick','w','r','rc','heb'];
+const CLES_PARTAGE=['v','sg','m','fl','occ','dow','dur','max','sort','q','pick','w','r','rc','heb','pct'];
 
 /** Rejoue un lien partagé. Retourne false si l'URL ne porte aucun filtre. */
 function applyStateFromUrl(){
@@ -1232,6 +1299,7 @@ function applyStateFromUrl(){
     document.querySelectorAll('.mo').forEach(el=>{const on=v.includes(el.dataset.mk);el.classList.toggle('on',on);if(on)AM.add(el.dataset.mk);});
   }
   if(q.has('fl')){AFL=q.get('fl');coche('[data-fl]','fl',[AFL]);}
+  if(q.has('pct')){APCT=new Set(liste('pct'));syncPct();}
   if(q.get('heb')==='1'){AHEB=true;document.querySelectorAll('[data-heb]').forEach(b=>b.classList.toggle('on',b.dataset.heb==='1'));}
   if(q.has('occ')){const v=liste('occ');AOCC.clear();v.forEach(x=>AOCC.add(parseInt(x)));coche('[data-occ]','occ',v);}
   if(q.has('dow')){const v=liste('dow');ADOW.clear();v.forEach(x=>ADOW.add(parseInt(x)));coche('[data-dow]','dow',v);}
@@ -1330,20 +1398,21 @@ function renderMatrix(){
     let m=lignes.get(r.iso);
     if(!m){m=new Map();lignes.set(r.iso,m);}
     const c=m.get(nom);
-    if(!c) m.set(nom,{min:r.pp,n:1});
-    else {c.n++; if(r.pp<c.min) c.min=r.pp;}
+    // On retient la remise DE L'OFFRE LA MOINS CHÈRE : c'est celle qu'on cite
+    // au client, pas la meilleure remise du lot à un prix plus élevé.
+    if(!c) m.set(nom,{min:r.pp,n:1,disc:r.disc,pct:r.pct,canon:r.canon,occ:r.occ,code:r.pr});
+    else {c.n++; if(r.pp<c.min){c.min=r.pp;c.disc=r.disc;c.pct=r.pct;c.canon=r.canon;c.occ=r.occ;c.code=r.pr;}}
   });
   const noms=[...villages].sort();
   const dates=[...lignes.keys()].sort();
 
-  // Échelle de couleur : quartiles sur l'ensemble des minima affichés
   const valeurs=[];
   lignes.forEach(m=>m.forEach(c=>valeurs.push(c.min)));
   valeurs.sort((a,b)=>a-b);
-  const q=(p)=>valeurs[Math.floor((valeurs.length-1)*p)];
-  const q1=q(0.25),q2=q(0.5),q3=q(0.75);
-  const classe=(v)=>v<=q1?'q1':v<=q2?'q2':v<=q3?'':'q4';
   const fmt=(v)=>v.toLocaleString('en-US');
+  // Palier commercial de la remise (5, 10, 15 %) calcule a la lecture du fichier
+  const taux=(c)=>c.pct||0;
+  const classe=(c)=>{const t=taux(c);return t>=15?'pr3':t>=10?'pr2':t>=5?'pr1':'pr0';};
 
   let html='<div style="overflow:auto"><table class="mx"><thead><tr><th>Départ</th>';
   noms.forEach(n=>{html+='<th title="'+n+'">'+n.replace(/ /g,'<br>')+'</th>';});
@@ -1362,10 +1431,13 @@ function renderMatrix(){
       const c=m.get(n);
       const enHebreu=!!(he&&he.v.indexOf(n)>=0);
       if(!c){html+='<td class="vide'+(enHebreu?' heb':'')+'">·</td>';return;}
-      html+='<td class="'+classe(c.min)+(c.min===minJour?' jour':'')+(enHebreu?' heb':'')+'" data-iso="'+iso+'" data-r="'+
+      const t=taux(c);
+      const parPers=c.occ?Math.round(c.disc/c.occ):0;
+      html+='<td class="'+classe(c)+(c.min===minJour?' jour':'')+(enHebreu?' heb':'')+'" data-iso="'+iso+'" data-r="'+
         n.replace(/"/g,'&quot;')+'" title="'+n+' — '+c.n+' offre'+(c.n>1?'s':'')+' à partir de '+fmt(c.min)+' € /pers.'+
+        (t>0?' · remise '+(c.canon?t+' % sur le séjour':'en montant fixe ('+t+' % effectifs)')+' (−'+fmt(parPers)+' € /pers.'+(c.code?', '+c.code:'')+')':' · aucune remise')+
         (enHebreu?' — encadrement en hébreu'+(fete?' · '+fete:'')+(estNeuf(iso,n)?' · nouveau village':''):'')+'">'+
-        fmt(c.min)+'</td>';
+        fmt(c.min)+(t>0?'<span class="rem">−'+(c.canon?t+'%':fmt(parPers)+' €')+'</span>':'')+'</td>';
     });
     html+='<td class="tot">'+fmt(minJour)+'</td></tr>';
   });
@@ -1379,12 +1451,19 @@ function renderMatrix(){
   });
   html+='<td class="tot">'+fmt(valeurs[0])+'</td></tr></tfoot></table></div>';
 
+  // Sélecteur de palier de remise, directement sous le tableau
+  html+='<div class="pct-bar"><span style="font-weight:600;color:#475569">💸 Remise sur le séjour :</span>'+
+    PALIERS.map(([v,l])=>'<button class="sbt" data-pct="'+v+'"'+
+      ((v==='a'?APCT.size===0:APCT.has(v))?' style="background:#1a3a5c;color:white;border-color:#1a3a5c"':'')+
+      '>'+l+'</button>').join('')+'</div>';
+
   html+='<div class="mx-lg">Prix minimum <strong>par personne</strong>, toutes chambres et occupations confondues parmi les '+
     FD.length.toLocaleString('en-US')+' offres filtrées — affine avec les filtres de gauche. '+
     'Clique une case pour voir le détail de ce village à cette date.'+
-    '<br><i style="background:#dcfce7"></i>25 % les moins chers <i style="background:#f0fdf4"></i>sous la médiane '+
-    '<i style="background:white"></i>au-dessus <i style="background:#fff7ed"></i>25 % les plus chers '+
-    '<i style="background:white;box-shadow:inset 0 0 0 1.5px #f59e0b"></i>meilleur prix du jour'+
+    '<br>Fond = <strong>remise sur le séjour</strong> (le vol, lui, ne bénéficie pas de la remise) : '+
+    '<i style="background:#bbf7d0"></i>15 % et plus <i style="background:#dcfce7"></i>10 % '+
+    '<i style="background:#f0fdf4"></i>5 % <i style="background:white"></i>aucune remise'+
+    '<br><i style="background:white;box-shadow:inset 0 0 0 1.5px #f59e0b"></i>meilleur prix du jour'+
     '<i style="background:#2563eb;border-radius:50%"></i>départ encadré en hébreu (🇮🇱 sur la date)</div>';
 
   list.innerHTML=html;
@@ -1661,7 +1740,8 @@ function mkCard(r,best){
       '<div class="card-right">' +
         '<div><span class="price">'+pp.toLocaleString()+' EUR</span><span class="p-lbl"> /pp</span></div>' +
         '<div class="p-tot">Total: '+tp.toLocaleString()+' EUR</div>' +
-        (disc>0?'<div style="color:#15803d;font-size:10px;font-weight:600">💚 Save: '+disc.toLocaleString()+' EUR</div>':'') +
+        (disc>0?'<div style="color:#15803d;font-size:10px;font-weight:600">💚 Save: '+disc.toLocaleString()+' EUR'+
+          (r.pct?' <span style="background:#dcfce7;padding:1px 4px;border-radius:3px">−'+r.pct+'% séjour</span>':'')+'</div>':'') +
         link +
         crmLink +
       '</div>' +
@@ -1686,6 +1766,11 @@ function mkCard(r,best){
   return div;
 }
 
+// La barre des paliers est reconstruite a chaque rendu : delegation obligatoire
+document.addEventListener('click',function(e){
+  const b=e.target.closest('[data-pct]');
+  if(b) setPct(b.dataset.pct);
+});
 document.addEventListener("click", function(e2){
   const tog = e2.target.closest(".fl-tog");
   if(tog) { const fid = tog.dataset.fid; if(fid) tFl(fid); }
@@ -1697,7 +1782,7 @@ function tFl(id){
 
 /* ── RESET ── */
 function resetAll(){
-  ASG='a';AM.clear();AFL='a';MATRIX_PICK=null;AHEB=false;
+  ASG='a';AM.clear();AFL='a';MATRIX_PICK=null;AHEB=false;APCT.clear();syncPct();
   document.querySelectorAll('[data-heb]').forEach(b=>b.classList.toggle('on',b.dataset.heb==='a'));
   document.querySelector('[data-sg="a"]').click();
   document.querySelectorAll('.mo').forEach(el=>el.classList.remove('on'));
