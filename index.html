@@ -80,9 +80,12 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1e293
 .search-clear:hover{background:#f0f4f8;color:#374151}
 .search-stats{font-size:11px;color:#94a3b8;margin-top:5px;min-height:14px}
 .filter-summary{display:flex}
-.f-tag{background:#1a3a5c;color:white;border-radius:4px;padding:2px 8px;font-size:10.5px;font-weight:600;white-space:nowrap}
-.f-tag-clear{background:none;border:none;color:#1a3a5c;font-size:10px;cursor:pointer;padding:0 4px;opacity:.7}
-.f-tag-clear:hover{opacity:1}
+.f-tag{background:#1a3a5c;color:white;border-radius:4px;padding:2px 3px 2px 9px;font-size:10.5px;font-weight:600;white-space:nowrap;display:inline-flex;align-items:center;gap:3px}
+/* La croix était en #1a3a5c sur un fond #1a3a5c : présente et fonctionnelle,
+   mais invisible. D'où l'impression qu'on ne pouvait pas retirer un filtre. */
+.f-tag-clear{background:rgba(255,255,255,.18);border:none;color:white;font-size:11px;line-height:1;
+             cursor:pointer;padding:3px 6px;border-radius:3px;opacity:.9}
+.f-tag-clear:hover{opacity:1;background:rgba(255,255,255,.38)}
 /* OCCUPANCY LOCK */
 .occ-locked{opacity:.35;pointer-events:none}
 .occ-locked-msg{font-size:10px;color:#94a3b8;font-style:italic;margin-top:4px;padding:0 2px}
@@ -212,6 +215,10 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1e293
   .sbt{padding:5px 9px;font-size:11.5px}
   #presetSki,#shareBtn{font-size:11px}
   .mx-lg{padding:7px 2px}
+  /* cibles tactiles : une croix de 10 px ne se touche pas au doigt */
+  .f-tag{font-size:12px;padding:4px 4px 4px 11px}
+  .f-tag-clear{font-size:15px;padding:8px 13px}
+  #filterSummary{row-gap:6px}
   #whoBar{font-size:11.5px;padding:7px 10px}
   /* Les détails de vol occupaient les deux tiers de chaque carte : on les
      replie derrière un bouton, que le CSS d'origine masquait. */
@@ -304,7 +311,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1e293
       <div class="sg s3" data-sg="3" onclick="setSg(this,event)"><span class="sg-ico">🏔️</span><span class="sg-lbl">Summer Mountain</span><span class="sg-cnt" id="c3">—</span></div>
       <div class="sg s1" data-sg="1" onclick="setSg(this,event)"><span class="sg-ico">🏖️</span><span class="sg-lbl">Short Haul</span><span class="sg-cnt" id="c1">—</span></div>
       <div class="sg s2" data-sg="2" onclick="setSg(this,event)"><span class="sg-ico">✈️</span><span class="sg-lbl">Long Haul</span><span class="sg-cnt" id="c2">—</span></div>
-      <div style="font-size:9.5px;color:#94a3b8;padding:2px 4px;margin-top:1px">💡 Ctrl+Click to combine multiple</div>
+      <div style="font-size:9.5px;color:#94a3b8;padding:2px 4px;margin-top:1px">💡 Ctrl+Click to combine · click again to remove</div>
     </div>
   </div>
   <div>
@@ -366,7 +373,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f4f8;color:#1e293
       <button class="fb" data-occ="4" onclick="setOcc(this,event)">2 adults + 2 children</button>
       <button class="fb" data-occ="5" onclick="setOcc(this,event)">2 adults + 3 children</button>
       <button class="fb" data-occ="6" onclick="setOcc(this,event)">2 adults + 4 children</button>
-      <div style="font-size:9.5px;color:#94a3b8;padding:2px 4px;margin-top:1px">💡 Ctrl+Click to combine multiple</div>
+      <div style="font-size:9.5px;color:#94a3b8;padding:2px 4px;margin-top:1px">💡 Ctrl+Click to combine · click again to remove</div>
     </div>
     <div class="occ-locked-msg" id="occLockMsg" style="display:none">✈ Flight = 2 persons only. Use Land Only for groups.</div>
   </div>
@@ -785,6 +792,12 @@ function setSg(btn,e){
       btn.classList.add('on');
     }
     allBtn.classList.toggle('on',ASGS.size===0);
+  } else if(ASGS.size===1&&ASGS.has(parseInt(v))){
+    // Re-cliquer le filtre actif le retire : sans ça, il fallait deviner
+    // qu'on passe par « All segments » pour l'annuler.
+    ASGS.clear();
+    document.querySelectorAll('[data-sg]').forEach(b=>b.classList.remove('on'));
+    allBtn.classList.add('on');
   } else {
     // Single click = select only this one
     ASGS.clear();
@@ -797,10 +810,13 @@ function setSg(btn,e){
 }
 
 function setDur(btn){
-  document.querySelectorAll('[data-dur]').forEach(b=>b.classList.remove('on'));
-  btn.classList.add('on');
+  const v=btn.dataset.dur;
+  // Re-cliquer la durée active revient à « All »
+  const retire=v!=='a'&&ADUR.size===1&&ADUR.has(parseInt(v));
   ADUR.clear();
-  if(btn.dataset.dur!=='a') ADUR.add(parseInt(btn.dataset.dur));
+  if(v!=='a'&&!retire) ADUR.add(parseInt(v));
+  const actif=retire?'a':v;
+  document.querySelectorAll('[data-dur]').forEach(b=>b.classList.toggle('on',b.dataset.dur===actif));
   af();
 }
 
@@ -817,6 +833,10 @@ function setDow(btn){
       if(ADOW.has(parseInt(v))){ADOW.delete(parseInt(v));btn.classList.remove('on');}
       else{ADOW.add(parseInt(v));btn.classList.add('on');}
       allBtn.classList.toggle('on',ADOW.size===0);
+    } else if(ADOW.size===1&&ADOW.has(parseInt(v))){
+      ADOW.clear();                       // re-clic = on retire le filtre
+      document.querySelectorAll('[data-dow]').forEach(b=>b.classList.remove('on'));
+      allBtn.classList.add('on');
     } else {
       ADOW.clear();
       document.querySelectorAll('[data-dow]').forEach(b=>b.classList.remove('on'));
@@ -829,9 +849,10 @@ function setDow(btn){
 }
 
 function setFl(btn){
-  document.querySelectorAll('[data-fl]').forEach(b=>b.classList.remove('on'));
-  btn.classList.add('on');
-  AFL=btn.dataset.fl;
+  // Re-cliquer le type de vol actif revient à « All »
+  const v=(AFL===btn.dataset.fl&&AFL!=='a')?'a':btn.dataset.fl;
+  AFL=v;
+  document.querySelectorAll('[data-fl]').forEach(b=>b.classList.toggle('on',b.dataset.fl===v));
   updateOccLock();
   af();
 }
@@ -901,6 +922,10 @@ function setOcc(btn,e){
       btn.classList.add('on');
     }
     allBtn.classList.toggle('on',AOCC.size===0);
+  } else if(AOCC.size===1&&AOCC.has(parseInt(v))){
+    AOCC.clear();                        // re-clic = on retire le filtre
+    document.querySelectorAll('[data-occ]').forEach(b=>b.classList.remove('on'));
+    allBtn.classList.add('on');
   } else {
     // Single click = select only this one
     AOCC.clear();
